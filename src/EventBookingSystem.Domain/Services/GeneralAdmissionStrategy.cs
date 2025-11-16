@@ -1,32 +1,34 @@
 ﻿using EventBookingSystem.Domain.Entities;
 using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace EventBookingSystem.Domain.Services
 {
-    public class GeneralAdmissionStrategy : ISeatingStrategy
+    /// <summary>
+    /// Handles simple general admission reservations where no specific seat or section assignments are made.
+    /// This is for events like standing-room concerts, festival lawn seating, or any event with open admission.
+    /// </summary>
+    public class GeneralAdmissionReservationStrategy : IReservationStrategy<GeneralAdmissionEvent>
     {
-        public bool CanHandle(EventType eventType)
+        /// <summary>
+        /// Validates if tickets can be reserved for the general admission event.
+        /// </summary>
+        public ValidationResult ValidateReservation(Venue venue, GeneralAdmissionEvent evnt, ReservationRequest request)
         {
-            return eventType == EventType.GeneralAdmission;
+            return evnt.ValidateCapacity(request.Quantity);
         }
-        public ValidationResult ValidateReservation(Venue venue, Event evnt, int? sectionId = null)
+        
+        /// <summary>
+        /// Reserves general admission tickets.
+        /// </summary>
+        public void Reserve(Venue venue, GeneralAdmissionEvent evnt, ReservationRequest request)
         {
-           return evnt.SeatsReservered < venue.MaxCapacity
-                ? ValidationResult.Success()
-                : ValidationResult.Failure("No available seats for this event.");
-        }
-        public void Reserve(Venue venue, Event evnt, int? sectionId = null)
-        {
-            var validationResult = ValidateReservation(venue, evnt, sectionId);
-            if (!validationResult.IsValid)
+            var validation = ValidateReservation(venue, evnt, request);
+            if (!validation.IsValid)
             {
-                throw new InvalidOperationException(validationResult.ErrorMessage);
+                throw new InvalidOperationException(validation.ErrorMessage);
             }
-            evnt.BookSeat();
+            
+            evnt.ReserveTickets(request.Quantity);
         }
-
-
     }
 }

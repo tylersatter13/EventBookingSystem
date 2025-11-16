@@ -11,6 +11,6 @@ namespace EventBookingSystem.Domain.Entities
         public int Remaining { get; set; }
 
         // Navigation property
-        public Event Event { get; set; }
+        public EventBase Event { get; set; }
     }
 }
