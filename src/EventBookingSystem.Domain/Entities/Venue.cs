@@ -4,6 +4,7 @@ using System.Text;
 
 namespace EventBookingSystem.Domain.Entities
 {
+
     public class Venue
     {
         //public required int Id { get; set; }
@@ -43,18 +44,9 @@ namespace EventBookingSystem.Domain.Entities
         /// existing events and venue capacity.</param>
         /// <exception cref="InvalidOperationException">Thrown if the event conflicts with an existing scheduled event or if its estimated attendance exceeds the
         /// venue's maximum capacity.</exception>
-        public void BookEvent(Event evnt)
+        internal void BookEvent(Event evnt)
         {         
-            var conflictingEvents = Events.Where(e =>
-                (evnt.StartsAt < e.EndsAt) && (e.StartsAt < evnt.EndsAt));
-            if (conflictingEvents.Any())
-            {
-                throw new InvalidOperationException("The event conflicts with existing scheduled events at the venue.");
-            }
-            if( evnt.EstimatedAttendance > MaxCapacity)
-            {
-                throw new InvalidOperationException("The event exceeds the venue's maximum capacity.");
-            }
+           
             Events.Add(evnt);
         }
     }
