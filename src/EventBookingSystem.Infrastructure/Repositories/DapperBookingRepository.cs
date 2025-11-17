@@ -15,11 +15,22 @@ public class DapperBookingRepository : IBookingRepository
 {
     private readonly IDBConnectionFactory _connectionFactory;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DapperBookingRepository"/> class.
+    /// </summary>
+    /// <param name="connectionFactory">The database connection factory.</param>
     public DapperBookingRepository(IDBConnectionFactory connectionFactory)
     {
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
     }
 
+    /// <summary>
+    /// Adds a new booking entity to the database.
+    /// </summary>
+    /// <param name="entity">The booking entity to add.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The added <see cref="Booking"/> entity with generated IDs.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if booking items are invalid for the booking type.</exception>
     public async Task<Booking> AddAsync(Booking entity, CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
@@ -68,6 +79,12 @@ public class DapperBookingRepository : IBookingRepository
         return entity;
     }
 
+    /// <summary>
+    /// Gets a booking by its unique identifier.
+    /// </summary>
+    /// <param name="id">The booking ID.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The <see cref="Booking"/> if found; otherwise, null.</returns>
     public async Task<Booking?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
@@ -81,6 +98,12 @@ public class DapperBookingRepository : IBookingRepository
         return await PopulateBookingNavigationProperties(connection, dto);
     }
 
+    /// <summary>
+    /// Gets all bookings for a specific user.
+    /// </summary>
+    /// <param name="userId">The user ID to search for.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A collection of bookings for the user.</returns>
     public async Task<IEnumerable<Booking>> GetByUserIdAsync(int userId, CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
@@ -98,6 +121,12 @@ public class DapperBookingRepository : IBookingRepository
         return bookings;
     }
 
+    /// <summary>
+    /// Gets all bookings for a specific event.
+    /// </summary>
+    /// <param name="eventId">The event ID to search for.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A collection of bookings for the event.</returns>
     public async Task<IEnumerable<Booking>> GetByEventIdAsync(int eventId, CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
@@ -115,6 +144,10 @@ public class DapperBookingRepository : IBookingRepository
         return bookings;
     }
 
+    /// <summary>
+    /// Gets all bookings in the system.
+    /// </summary>
+    /// <returns>A collection of all bookings.</returns>
     public async Task<IEnumerable<Booking>> GetAllBookings()
     {
         using var connection = await _connectionFactory.CreateConnectionAsync();
@@ -142,6 +175,9 @@ public class DapperBookingRepository : IBookingRepository
     /// 
     /// This uses a subquery to identify qualifying users, then retrieves all their bookings at the venue.
     /// </summary>
+    /// <param name="venueId">The venue ID to search for.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A collection of bookings for users with at least one paid booking at the venue.</returns>
     public async Task<IEnumerable<Booking>> FindBookingsForPaidUsersAtVenueAsync(int venueId, CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
@@ -189,6 +225,9 @@ public class DapperBookingRepository : IBookingRepository
     /// - Finding users who haven't engaged with a specific venue
     /// - Target marketing campaigns to non-customers
     /// </summary>
+    /// <param name="venueId">The venue ID to search for.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A collection of user IDs with no bookings at the venue.</returns>
     public async Task<IEnumerable<int>> FindUsersWithoutBookingsInVenueAsync(int venueId, CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
@@ -216,6 +255,9 @@ public class DapperBookingRepository : IBookingRepository
     /// <summary>
     /// Populates navigation properties (User, Event, BookingItems) for a booking.
     /// </summary>
+    /// <param name="connection">The database connection.</param>
+    /// <param name="dto">The booking DTO.</param>
+    /// <returns>The populated <see cref="Booking"/> entity.</returns>
     private async Task<Booking> PopulateBookingNavigationProperties(IDbConnection connection, BookingDto dto)
     {
         var booking = BookingMapper.ToDomain(dto);

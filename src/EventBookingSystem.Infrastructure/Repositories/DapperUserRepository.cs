@@ -1,10 +1,9 @@
-using System.Data;
 using Dapper;
-using EventBookingSystem.Infrastructure.Data;
-using EventBookingSystem.Infrastructure.Models;
-using EventBookingSystem.Infrastructure.Interfaces;
 using EventBookingSystem.Domain.Entities;
+using EventBookingSystem.Infrastructure.Data;
+using EventBookingSystem.Infrastructure.Interfaces;
 using EventBookingSystem.Infrastructure.Mapping;
+using EventBookingSystem.Infrastructure.Models;
 
 namespace EventBookingSystem.Infrastructure.Repositories;
 
@@ -15,11 +14,21 @@ public class DapperUserRepository : IUserRepository
 {
     private readonly IDBConnectionFactory _connectionFactory;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DapperUserRepository"/> class.
+    /// </summary>
+    /// <param name="connectionFactory">The database connection factory.</param>
     public DapperUserRepository(IDBConnectionFactory connectionFactory)
     {
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
     }
 
+    /// <summary>
+    /// Adds a new user entity to the database.
+    /// </summary>
+    /// <param name="entity">The user entity to add.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The added <see cref="User"/> entity with generated ID.</returns>
     public async Task<User> AddAsync(User entity, CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
@@ -37,6 +46,12 @@ public class DapperUserRepository : IUserRepository
         return entity;
     }
 
+    /// <summary>
+    /// Gets a user by their unique identifier.
+    /// </summary>
+    /// <param name="id">The user ID.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The <see cref="User"/> if found; otherwise, null.</returns>
     public async Task<User?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
@@ -47,6 +62,12 @@ public class DapperUserRepository : IUserRepository
         return dto != null ? UserMapper.ToDomain(dto) : null;
     }
 
+    /// <summary>
+    /// Gets a user by their email address.
+    /// </summary>
+    /// <param name="email">The email address to search for.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The <see cref="User"/> if found; otherwise, null.</returns>
     public async Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);

@@ -1,10 +1,9 @@
-using System.Data;
 using Dapper;
-using EventBookingSystem.Infrastructure.Data;
-using EventBookingSystem.Infrastructure.Models;
-using EventBookingSystem.Infrastructure.Interfaces;
 using EventBookingSystem.Domain.Entities;
+using EventBookingSystem.Infrastructure.Data;
+using EventBookingSystem.Infrastructure.Interfaces;
 using EventBookingSystem.Infrastructure.Mapping;
+using EventBookingSystem.Infrastructure.Models;
 
 namespace EventBookingSystem.Infrastructure.Repositories;
 
@@ -15,11 +14,21 @@ public class DapperVenueRepository : IVenueRepository
 {
     private readonly IDBConnectionFactory _connectionFactory;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DapperVenueRepository"/> class.
+    /// </summary>
+    /// <param name="connectionFactory">The database connection factory.</param>
     public DapperVenueRepository(IDBConnectionFactory connectionFactory)
     {
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
     }
 
+    /// <summary>
+    /// Adds a new venue entity to the database, including sections and seats if present.
+    /// </summary>
+    /// <param name="entity">The venue entity to add.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The added <see cref="Venue"/> entity with generated IDs.</returns>
     public async Task<Venue> AddAsync(Venue entity, CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
@@ -88,6 +97,12 @@ public class DapperVenueRepository : IVenueRepository
         }
     }
 
+    /// <summary>
+    /// Gets a venue by its unique identifier.
+    /// </summary>
+    /// <param name="id">The venue ID.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The <see cref="Venue"/> if found; otherwise, null.</returns>
     public async Task<Venue?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);

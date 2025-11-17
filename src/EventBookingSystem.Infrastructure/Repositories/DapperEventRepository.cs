@@ -1,16 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using Dapper;
+﻿using Dapper;
 using EventBookingSystem.Domain.Entities;
 using EventBookingSystem.Infrastructure.Data;
 using EventBookingSystem.Infrastructure.Interfaces;
 using EventBookingSystem.Infrastructure.Mapping;
 using EventBookingSystem.Infrastructure.Models;
+using System.Data;
 
 namespace EventBookingSystem.Infrastructure.Repositories;
 
@@ -22,6 +16,10 @@ public class DapperEventRepository : IEventRepository
 {
     private readonly IDBConnectionFactory _connectionFactory;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DapperEventRepository"/> class.
+    /// </summary>
+    /// <param name="connectionFactory">The database connection factory.</param>
     public DapperEventRepository(IDBConnectionFactory connectionFactory)
     {
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
@@ -29,6 +27,12 @@ public class DapperEventRepository : IEventRepository
 
     #region Basic CRUD Operations
 
+    /// <summary>
+    /// Adds a new event to the database, including related data for polymorphic event types.
+    /// </summary>
+    /// <param name="entity">The event entity to add.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The added <see cref="EventBase"/> entity with generated IDs.</returns>
     public async Task<EventBase> AddAsync(EventBase entity, CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
@@ -56,6 +60,12 @@ public class DapperEventRepository : IEventRepository
         }
     }
 
+    /// <summary>
+    /// Gets an event by its unique identifier.
+    /// </summary>
+    /// <param name="id">The event ID.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The <see cref="EventBase"/> if found; otherwise, null.</returns>
     public async Task<EventBase?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
@@ -79,6 +89,12 @@ public class DapperEventRepository : IEventRepository
         return eventBase;
     }
 
+    /// <summary>
+    /// Gets an event by its unique identifier, including all related details (sections, seats, inventories).
+    /// </summary>
+    /// <param name="id">The event ID.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The <see cref="EventBase"/> with details if found; otherwise, null.</returns>
     public async Task<EventBase?> GetByIdWithDetailsAsync(int id, CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
@@ -105,6 +121,12 @@ public class DapperEventRepository : IEventRepository
         return eventBase;
     }
 
+    /// <summary>
+    /// Updates an existing event and its related data.
+    /// </summary>
+    /// <param name="entity">The event entity to update.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The updated <see cref="EventBase"/> entity.</returns>
     public async Task<EventBase> UpdateAsync(EventBase entity, CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
@@ -131,6 +153,12 @@ public class DapperEventRepository : IEventRepository
         }
     }
 
+    /// <summary>
+    /// Deletes an event by its unique identifier.
+    /// </summary>
+    /// <param name="id">The event ID.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>True if the event was deleted; otherwise, false.</returns>
     public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
@@ -145,6 +173,12 @@ public class DapperEventRepository : IEventRepository
 
     #region Query Operations
 
+    /// <summary>
+    /// Gets all events for a specific venue.
+    /// </summary>
+    /// <param name="venueId">The venue ID.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A collection of events for the venue.</returns>
     public async Task<IEnumerable<EventBase>> GetByVenueIdAsync(int venueId, CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
@@ -155,6 +189,13 @@ public class DapperEventRepository : IEventRepository
         return dtos.Select(EventMapper.ToDomain).ToList();
     }
 
+    /// <summary>
+    /// Gets events within a specified date range.
+    /// </summary>
+    /// <param name="startDate">The start date (inclusive).</param>
+    /// <param name="endDate">The end date (inclusive).</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A collection of events within the date range.</returns>
     public async Task<IEnumerable<EventBase>> GetByDateRangeAsync(DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
@@ -177,6 +218,12 @@ public class DapperEventRepository : IEventRepository
 
     #region Section Inventories and Event Seats
 
+    /// <summary>
+    /// Adds or updates section inventories for a section-based event.
+    /// </summary>
+    /// <param name="eventId">The event ID.</param>
+    /// <param name="inventories">The section inventories.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
     public async Task SaveSectionInventoriesAsync(int eventId, IEnumerable<EventSectionInventory> inventories, CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
@@ -211,6 +258,12 @@ public class DapperEventRepository : IEventRepository
         }
     }
 
+    /// <summary>
+    /// Adds or updates event seats for a reserved seating event.
+    /// </summary>
+    /// <param name="eventId">The event ID.</param>
+    /// <param name="seats">The event seats.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
     public async Task SaveEventSeatsAsync(int eventId, IEnumerable<EventSeat> seats, CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
@@ -262,6 +315,11 @@ public class DapperEventRepository : IEventRepository
 
     #region Helper Methods
 
+    /// <summary>
+    /// Builds the SQL insert statement for the specified event type.
+    /// </summary>
+    /// <param name="eventType">The event type discriminator.</param>
+    /// <returns>The SQL insert statement.</returns>
     private static string BuildInsertSql(string eventType)
     {
         return eventType switch
@@ -293,6 +351,11 @@ public class DapperEventRepository : IEventRepository
         };
     }
 
+    /// <summary>
+    /// Builds the SQL update statement for the specified event type.
+    /// </summary>
+    /// <param name="eventType">The event type discriminator.</param>
+    /// <returns>The SQL update statement.</returns>
     private static string BuildUpdateSql(string eventType)
     {
         return eventType switch
@@ -333,6 +396,12 @@ public class DapperEventRepository : IEventRepository
         };
     }
 
+    /// <summary>
+    /// Saves related data for the event based on its type (sections or seats).
+    /// </summary>
+    /// <param name="connection">The database connection.</param>
+    /// <param name="transaction">The database transaction.</param>
+    /// <param name="eventBase">The event entity.</param>
     private async Task SaveRelatedDataAsync(IDbConnection connection, IDbTransaction transaction, EventBase eventBase)
     {
         switch (eventBase)
@@ -347,12 +416,23 @@ public class DapperEventRepository : IEventRepository
         }
     }
 
+    /// <summary>
+    /// Updates related data for the event based on its type (sections or seats).
+    /// </summary>
+    /// <param name="connection">The database connection.</param>
+    /// <param name="transaction">The database transaction.</param>
+    /// <param name="eventBase">The event entity.</param>
     private async Task UpdateRelatedDataAsync(IDbConnection connection, IDbTransaction transaction, EventBase eventBase)
     {
         // Same as SaveRelatedDataAsync since we replace all related data
         await SaveRelatedDataAsync(connection, transaction, eventBase);
     }
 
+    /// <summary>
+    /// Loads related data for the event based on its type (sections or seats).
+    /// </summary>
+    /// <param name="connection">The database connection.</param>
+    /// <param name="eventBase">The event entity.</param>
     private async Task LoadRelatedDataAsync(IDbConnection connection, EventBase eventBase)
     {
         switch (eventBase)
@@ -367,6 +447,11 @@ public class DapperEventRepository : IEventRepository
         }
     }
 
+    /// <summary>
+    /// Loads section inventories for a section-based event.
+    /// </summary>
+    /// <param name="connection">The database connection.</param>
+    /// <param name="sbEvent">The section-based event.</param>
     private async Task LoadSectionInventoriesAsync(IDbConnection connection, SectionBasedEvent sbEvent)
     {
         var sql = "SELECT * FROM EventSectionInventories WHERE EventId = @EventId";
@@ -377,6 +462,11 @@ public class DapperEventRepository : IEventRepository
             .ToList();
     }
 
+    /// <summary>
+    /// Loads event seats for a reserved seating event.
+    /// </summary>
+    /// <param name="connection">The database connection.</param>
+    /// <param name="rsEvent">The reserved seating event.</param>
     private async Task LoadEventSeatsAsync(IDbConnection connection, ReservedSeatingEvent rsEvent)
     {
         var sql = "SELECT * FROM EventSeats WHERE EventId = @EventId";
@@ -387,6 +477,13 @@ public class DapperEventRepository : IEventRepository
             .ToList();
     }
 
+    /// <summary>
+    /// Saves section inventories for a section-based event, handling both inserts and updates.
+    /// </summary>
+    /// <param name="connection">The database connection.</param>
+    /// <param name="transaction">The database transaction.</param>
+    /// <param name="eventId">The event ID.</param>
+    /// <param name="inventories">The section inventories.</param>
     private async Task SaveSectionInventoriesInternalAsync(
         IDbConnection connection, 
         IDbTransaction transaction, 
@@ -428,12 +525,19 @@ public class DapperEventRepository : IEventRepository
         }
     }
 
+    /// <summary>
+    /// Saves event seats for a reserved seating event, handling both inserts and updates.
+    /// </summary>
+    /// <param name="connection">The database connection.</param>
+    /// <param name="transaction">The database transaction.</param>
+    /// <param name="eventId">The event ID.</param>
+    /// <param name="seats">The event seats.</param>
     private async Task SaveEventSeatsInternalAsync(
         IDbConnection connection, 
         IDbTransaction transaction, 
         int eventId, 
         IEnumerable<EventSeat> seats)
-    {        
+    {
         foreach (var seat in seats)
         {
             if (seat.Id > 0)
