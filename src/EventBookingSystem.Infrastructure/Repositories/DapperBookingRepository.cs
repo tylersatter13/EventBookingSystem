@@ -133,6 +133,87 @@ public class DapperBookingRepository : IBookingRepository
     }
 
     /// <summary>
+    /// Finds bookings for users who have at least one successfully paid booking at the specified venue.
+    /// Returns all bookings (paid and unpaid) for qualifying users at the specified venue.
+    /// 
+    /// Implementation approach:
+    /// 1. Find all users who have at least one paid booking at the venue
+    /// 2. Return all bookings for those users at the same venue
+    /// 
+    /// This uses a subquery to identify qualifying users, then retrieves all their bookings at the venue.
+    /// </summary>
+    public async Task<IEnumerable<Booking>> FindBookingsForPaidUsersAtVenueAsync(int venueId, CancellationToken cancellationToken = default)
+    {
+        using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
+
+        // SQL query that:
+        // 1. Joins Bookings with Events to filter by VenueId
+        // 2. Uses a subquery to find users with at least one paid booking at this venue
+        // 3. Returns all bookings for those users at this venue
+        var sql = @"
+            SELECT b.*
+            FROM Bookings b
+            INNER JOIN Events e ON b.EventId = e.Id
+            WHERE e.VenueId = @VenueId
+              AND b.UserId IN (
+                  SELECT DISTINCT b2.UserId
+                  FROM Bookings b2
+                  INNER JOIN Events e2 ON b2.EventId = e2.Id
+                  WHERE e2.VenueId = @VenueId
+                    AND b2.PaymentStatus = 'Paid'
+              )
+            ORDER BY b.CreatedAt DESC";
+
+        var dtos = await connection.QueryAsync<BookingDto>(sql, new { VenueId = venueId });
+
+        var bookings = new List<Booking>();
+        foreach (var dto in dtos)
+        {
+            var booking = await PopulateBookingNavigationProperties(connection, dto);
+            bookings.Add(booking);
+        }
+
+        return bookings;
+    }
+
+    /// <summary>
+    /// Finds all user IDs who have no bookings whatsoever at the specified venue.
+    /// 
+    /// Implementation approach:
+    /// 1. Get all user IDs from the Users table
+    /// 2. Exclude users who have any bookings at events in the specified venue
+    /// 3. Return the remaining user IDs
+    /// 
+    /// This is useful for:
+    /// - Identifying potential new customers for venue marketing
+    /// - Finding users who haven't engaged with a specific venue
+    /// - Target marketing campaigns to non-customers
+    /// </summary>
+    public async Task<IEnumerable<int>> FindUsersWithoutBookingsInVenueAsync(int venueId, CancellationToken cancellationToken = default)
+    {
+        using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
+
+        // SQL query that:
+        // 1. Selects all user IDs from Users table
+        // 2. Excludes users who appear in any booking for events at this venue
+        // 3. Uses NOT IN with subquery to find users without bookings
+        var sql = @"
+            SELECT u.Id
+            FROM Users u
+            WHERE u.Id NOT IN (
+                SELECT DISTINCT b.UserId
+                FROM Bookings b
+                INNER JOIN Events e ON b.EventId = e.Id
+                WHERE e.VenueId = @VenueId
+            )
+            ORDER BY u.Id";
+
+        var userIds = await connection.QueryAsync<int>(sql, new { VenueId = venueId });
+
+        return userIds.ToList();
+    }
+
+    /// <summary>
     /// Populates navigation properties (User, Event, BookingItems) for a booking.
     /// </summary>
     private async Task<Booking> PopulateBookingNavigationProperties(IDbConnection connection, BookingDto dto)

@@ -84,28 +84,48 @@ namespace EventBookingSystem.Application.Services
 
             var booking = await _bookingRepository.GetByIdAsync(bookingId, cancellationToken);
             
-            if (booking == null)
+            return booking != null ? MapToDto(booking) : null;
+        }
+
+        /// <summary>
+        /// Finds bookings for users who have at least one successfully paid booking at the specified venue.
+        /// Returns all bookings (paid and unpaid) for qualifying users at the specified venue.
+        /// 
+        /// Use cases:
+        /// - Customer loyalty analysis
+        /// - VIP customer identification
+        /// - Revenue attribution and analysis
+        /// - Support ticket prioritization
+        /// </summary>
+        public async Task<IEnumerable<BookingDto>> GetBookingsForPaidUsersAtVenueAsync(int venueId, CancellationToken cancellationToken = default)
+        {
+            if (venueId <= 0)
             {
-                return null;
+                throw new ArgumentException("Venue ID must be greater than zero", nameof(venueId));
             }
 
-            // If venue wasn't loaded with the booking, load it separately
-            string venueName = "Unknown Venue";
-            if (booking.Event.Venue != null)
+            var bookings = await _bookingRepository.FindBookingsForPaidUsersAtVenueAsync(venueId, cancellationToken);
+            
+            return bookings.Select(MapToDto).ToList();
+        }
+
+        /// <summary>
+        /// Finds all user IDs who have no bookings whatsoever at the specified venue.
+        /// 
+        /// Use cases:
+        /// - Target marketing campaigns to non-customers
+        /// - Identify potential new customers for venue promotions
+        /// - Customer acquisition analytics
+        /// - Cold outreach campaigns
+        /// </summary>
+        public async Task<IEnumerable<int>> GetUsersWithoutBookingsAtVenueAsync(int venueId, CancellationToken cancellationToken = default)
+        {
+            if (venueId <= 0)
             {
-                venueName = booking.Event.Venue.Name;
-            }
-            else
-            {
-                // Try to load venue information
-                var venue = await _eventRepository.GetByIdAsync(booking.Event.Id, cancellationToken);
-                if (venue?.Venue != null)
-                {
-                    venueName = venue.Venue.Name;
-                }
+                throw new ArgumentException("Venue ID must be greater than zero", nameof(venueId));
             }
 
-            return MapToDto(booking, venueName);
+            return await _bookingRepository.FindUsersWithoutBookingsInVenueAsync(venueId, cancellationToken);
         }
 
         /// <summary>

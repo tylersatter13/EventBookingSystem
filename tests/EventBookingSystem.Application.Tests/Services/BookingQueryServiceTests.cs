@@ -332,6 +332,260 @@ namespace EventBookingSystem.Application.Tests.Services
 
         #endregion
 
+        #region GetBookingsForPaidUsersAtVenueAsync Tests
+
+        [TestMethod]
+        public async Task GetBookingsForPaidUsersAtVenueAsync_ValidVenueId_ReturnsBookings()
+        {
+            // Arrange
+            var venueId = 1;
+            var user = new User { Id = 1, Name = "Paid User", Email = "paid@example.com" };
+            var venue = new Venue { Id = venueId, Name = "Test Venue", Address = "123 Venue St" };
+            var evnt = new GeneralAdmissionEvent
+            {
+                Id = 1,
+                VenueId = venueId,
+                Name = "Test Event",
+                StartsAt = DateTime.UtcNow.AddDays(7),
+                Capacity = 100,
+                Venue = venue
+            };
+
+            var booking1 = new Booking
+            {
+                Id = 1,
+                User = user,
+                Event = evnt,
+                BookingType = BookingType.GA,
+                PaymentStatus = PaymentStatus.Paid,
+                TotalAmount = 100m,
+                CreatedAt = DateTime.UtcNow,
+                BookingItems = new List<BookingItem>()
+            };
+
+            var booking2 = new Booking
+            {
+                Id = 2,
+                User = user,
+                Event = evnt,
+                BookingType = BookingType.GA,
+                PaymentStatus = PaymentStatus.Pending,
+                TotalAmount = 75m,
+                CreatedAt = DateTime.UtcNow.AddHours(1),
+                BookingItems = new List<BookingItem>()
+            };
+
+            _mockBookingRepository
+                .Setup(x => x.FindBookingsForPaidUsersAtVenueAsync(venueId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Booking> { booking1, booking2 });
+
+            // Act
+            var result = await _service.GetBookingsForPaidUsersAtVenueAsync(venueId);
+
+            // Assert
+            result.Should().NotBeNull();
+            result.Should().HaveCount(2);
+            result.All(b => b.VenueId == venueId).Should().BeTrue();
+            result.Should().Contain(b => b.PaymentStatus == "Paid");
+            result.Should().Contain(b => b.PaymentStatus == "Pending");
+            
+            _mockBookingRepository.Verify(
+                x => x.FindBookingsForPaidUsersAtVenueAsync(venueId, It.IsAny<CancellationToken>()), 
+                Times.Once);
+        }
+
+        [TestMethod]
+        public async Task GetBookingsForPaidUsersAtVenueAsync_InvalidVenueId_ThrowsArgumentException()
+        {
+            // Arrange
+            var venueId = 0;
+
+            // Act
+            Func<Task> act = async () => await _service.GetBookingsForPaidUsersAtVenueAsync(venueId);
+
+            // Assert
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage("Venue ID must be greater than zero*");
+        }
+
+        [TestMethod]
+        public async Task GetBookingsForPaidUsersAtVenueAsync_NegativeVenueId_ThrowsArgumentException()
+        {
+            // Arrange
+            var venueId = -5;
+
+            // Act
+            Func<Task> act = async () => await _service.GetBookingsForPaidUsersAtVenueAsync(venueId);
+
+            // Assert
+            await act.Should().ThrowAsync<ArgumentException>();
+        }
+
+        [TestMethod]
+        public async Task GetBookingsForPaidUsersAtVenueAsync_NoQualifyingBookings_ReturnsEmptyCollection()
+        {
+            // Arrange
+            var venueId = 1;
+            _mockBookingRepository
+                .Setup(x => x.FindBookingsForPaidUsersAtVenueAsync(venueId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Booking>());
+
+            // Act
+            var result = await _service.GetBookingsForPaidUsersAtVenueAsync(venueId);
+
+            // Assert
+            result.Should().NotBeNull();
+            result.Should().BeEmpty();
+        }
+
+        [TestMethod]
+        public async Task GetBookingsForPaidUsersAtVenueAsync_MapsAllBookingProperties()
+        {
+            // Arrange
+            var venueId = 1;
+            var user = new User { Id = 1, Name = "John Doe", Email = "john@example.com" };
+            var venue = new Venue { Id = venueId, Name = "Stadium", Address = "Sports Ave" };
+            var evnt = new GeneralAdmissionEvent
+            {
+                Id = 10,
+                VenueId = venueId,
+                Name = "Big Game",
+                StartsAt = DateTime.UtcNow.AddDays(14),
+                Capacity = 500,
+                Venue = venue
+            };
+
+            var booking = new Booking
+            {
+                Id = 5,
+                User = user,
+                Event = evnt,
+                BookingType = BookingType.GA,
+                PaymentStatus = PaymentStatus.Paid,
+                TotalAmount = 250m,
+                CreatedAt = DateTime.UtcNow.AddHours(-5),
+                BookingItems = new List<BookingItem>()
+            };
+
+            _mockBookingRepository
+                .Setup(x => x.FindBookingsForPaidUsersAtVenueAsync(venueId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Booking> { booking });
+
+            // Act
+            var result = await _service.GetBookingsForPaidUsersAtVenueAsync(venueId);
+
+            // Assert
+            var dto = result.First();
+            dto.Id.Should().Be(5);
+            dto.UserId.Should().Be(1);
+            dto.UserName.Should().Be("John Doe");
+            dto.UserEmail.Should().Be("john@example.com");
+            dto.EventId.Should().Be(10);
+            dto.EventName.Should().Be("Big Game");
+            dto.VenueId.Should().Be(venueId);
+            dto.VenueName.Should().Be("Stadium");
+            dto.BookingType.Should().Be("GA");
+            dto.PaymentStatus.Should().Be("Paid");
+            dto.TotalAmount.Should().Be(250m);
+        }
+
+        #endregion
+
+        #region GetUsersWithoutBookingsAtVenueAsync Tests
+
+        [TestMethod]
+        public async Task GetUsersWithoutBookingsAtVenueAsync_ValidVenueId_ReturnsUserIds()
+        {
+            // Arrange
+            var venueId = 1;
+            var userIds = new List<int> { 2, 3, 5, 8 };
+
+            _mockBookingRepository
+                .Setup(x => x.FindUsersWithoutBookingsInVenueAsync(venueId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(userIds);
+
+            // Act
+            var result = await _service.GetUsersWithoutBookingsAtVenueAsync(venueId);
+
+            // Assert
+            result.Should().NotBeNull();
+            result.Should().HaveCount(4);
+            result.Should().Contain(2);
+            result.Should().Contain(3);
+            result.Should().Contain(5);
+            result.Should().Contain(8);
+            
+            _mockBookingRepository.Verify(
+                x => x.FindUsersWithoutBookingsInVenueAsync(venueId, It.IsAny<CancellationToken>()), 
+                Times.Once);
+        }
+
+        [TestMethod]
+        public async Task GetUsersWithoutBookingsAtVenueAsync_InvalidVenueId_ThrowsArgumentException()
+        {
+            // Arrange
+            var venueId = 0;
+
+            // Act
+            Func<Task> act = async () => await _service.GetUsersWithoutBookingsAtVenueAsync(venueId);
+
+            // Assert
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage("Venue ID must be greater than zero*");
+        }
+
+        [TestMethod]
+        public async Task GetUsersWithoutBookingsAtVenueAsync_NegativeVenueId_ThrowsArgumentException()
+        {
+            // Arrange
+            var venueId = -10;
+
+            // Act
+            Func<Task> act = async () => await _service.GetUsersWithoutBookingsAtVenueAsync(venueId);
+
+            // Assert
+            await act.Should().ThrowAsync<ArgumentException>();
+        }
+
+        [TestMethod]
+        public async Task GetUsersWithoutBookingsAtVenueAsync_NoUsers_ReturnsEmptyCollection()
+        {
+            // Arrange
+            var venueId = 1;
+            _mockBookingRepository
+                .Setup(x => x.FindUsersWithoutBookingsInVenueAsync(venueId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<int>());
+
+            // Act
+            var result = await _service.GetUsersWithoutBookingsAtVenueAsync(venueId);
+
+            // Assert
+            result.Should().NotBeNull();
+            result.Should().BeEmpty();
+        }
+
+        [TestMethod]
+        public async Task GetUsersWithoutBookingsAtVenueAsync_PassesCancellationToken()
+        {
+            // Arrange
+            var venueId = 1;
+            var cancellationToken = new CancellationToken();
+
+            _mockBookingRepository
+                .Setup(x => x.FindUsersWithoutBookingsInVenueAsync(venueId, cancellationToken))
+                .ReturnsAsync(new List<int>());
+
+            // Act
+            await _service.GetUsersWithoutBookingsAtVenueAsync(venueId, cancellationToken);
+
+            // Assert
+            _mockBookingRepository.Verify(
+                x => x.FindUsersWithoutBookingsInVenueAsync(venueId, cancellationToken), 
+                Times.Once);
+        }
+
+        #endregion
+
         #region DTO Mapping Tests
 
         [TestMethod]

@@ -665,6 +665,676 @@ public class DapperBookingRepositoryTests
 
     #endregion
 
+    #region FindBookingsForPaidUsersAtVenueAsync Tests
+
+    [TestMethod]
+    public async Task FindBookingsForPaidUsersAtVenueAsync_ReturnsBookingsForUsersWithPaidBookings()
+    {
+        // Arrange
+        var connectionFactory = new SqliteConnectionFactory("Data Source=FindPaidUsersBookings;Mode=Memory;Cache=Shared");
+        using var keepAlive = await connectionFactory.CreateConnectionAsync();
+        await InitializeDatabaseAsync(connectionFactory);
+        
+        // Setup: Create venue, users, and events
+        int venueId, user1Id, user2Id, user3Id, event1Id, event2Id;
+        using (var setupConnection = await connectionFactory.CreateConnectionAsync())
+        {
+            using var command = setupConnection.CreateCommand();
+            
+            // Create venue
+            command.CommandText = "INSERT INTO Venues (Name, Address) VALUES ('Test Venue', '123 Test St'); SELECT last_insert_rowid();";
+            venueId = Convert.ToInt32(command.ExecuteScalar());
+            
+            // Create users
+            command.CommandText = "INSERT INTO Users (Name, Email) VALUES ('User 1', 'user1@example.com'); SELECT last_insert_rowid();";
+            user1Id = Convert.ToInt32(command.ExecuteScalar());
+            
+            command.CommandText = "INSERT INTO Users (Name, Email) VALUES ('User 2', 'user2@example.com'); SELECT last_insert_rowid();";
+            user2Id = Convert.ToInt32(command.ExecuteScalar());
+            
+            command.CommandText = "INSERT INTO Users (Name, Email) VALUES ('User 3', 'user3@example.com'); SELECT last_insert_rowid();";
+            user3Id = Convert.ToInt32(command.ExecuteScalar());
+            
+            // Create events at the venue
+            command.CommandText = $@"
+                INSERT INTO Events (VenueId, Name, StartsAt, EndsAt, EstimatedAttendance, EventType, GA_Capacity)
+                VALUES ({venueId}, 'Event 1', '{DateTime.UtcNow:o}', '{DateTime.UtcNow.AddHours(2):o}', 100, 'GeneralAdmission', 100);
+                SELECT last_insert_rowid();";
+            event1Id = Convert.ToInt32(command.ExecuteScalar());
+            
+            command.CommandText = $@"
+                INSERT INTO Events (VenueId, Name, StartsAt, EndsAt, EstimatedAttendance, EventType, GA_Capacity)
+                VALUES ({venueId}, 'Event 2', '{DateTime.UtcNow.AddDays(1):o}', '{DateTime.UtcNow.AddDays(1).AddHours(2):o}', 150, 'GeneralAdmission', 150);
+                SELECT last_insert_rowid();";
+            event2Id = Convert.ToInt32(command.ExecuteScalar());
+            
+            // Insert bookings:
+            // - User1: Paid booking at venue (should be included)
+            // - User1: Pending booking at venue (should be included - same user has paid)
+            // - User2: Only pending booking at venue (should be excluded - no paid bookings)
+            // - User3: Paid booking at venue (should be included)
+            var now = DateTime.UtcNow;
+            command.CommandText = $@"
+                INSERT INTO Bookings (UserId, EventId, BookingType, PaymentStatus, TotalAmount, CreatedAt)
+                VALUES 
+                    ({user1Id}, {event1Id}, 'GA', 'Paid', 100.00, '{now.AddHours(-3):o}'),
+                    ({user1Id}, {event2Id}, 'GA', 'Pending', 150.00, '{now.AddHours(-2):o}'),
+                    ({user2Id}, {event1Id}, 'GA', 'Pending', 75.00, '{now.AddHours(-1):o}'),
+                    ({user3Id}, {event2Id}, 'GA', 'Paid', 200.00, '{now:o}');";
+            command.ExecuteNonQuery();
+        }
+        
+        var repository = new DapperBookingRepository(connectionFactory);
+        
+        // Act
+        var results = (await repository.FindBookingsForPaidUsersAtVenueAsync(venueId)).ToList();
+        
+        // Assert
+        results.Should().NotBeNull();
+        results.Should().HaveCount(3, because: "User1 has 2 bookings (1 paid + 1 pending) and User3 has 1 paid booking");
+        
+        // Verify User1's bookings are included (both paid and pending)
+        results.Count(b => b.User.Id == user1Id).Should().Be(2);
+        results.Should().Contain(b => b.User.Id == user1Id && b.PaymentStatus == PaymentStatus.Paid);
+        results.Should().Contain(b => b.User.Id == user1Id && b.PaymentStatus == PaymentStatus.Pending);
+        
+        // Verify User2's booking is NOT included (only has pending)
+        results.Should().NotContain(b => b.User.Id == user2Id, because: "User2 has no paid bookings at this venue");
+        
+        // Verify User3's booking is included
+        results.Should().Contain(b => b.User.Id == user3Id && b.PaymentStatus == PaymentStatus.Paid);
+    }
+
+    [TestMethod]
+    public async Task FindBookingsForPaidUsersAtVenueAsync_ExcludesUsersWithoutPaidBookings()
+    {
+        // Arrange
+        var connectionFactory = new SqliteConnectionFactory("Data Source=FindPaidUsers_NoPaid;Mode=Memory;Cache=Shared");
+        using var keepAlive = await connectionFactory.CreateConnectionAsync();
+        await InitializeDatabaseAsync(connectionFactory);
+        
+        int venueId, userId, eventId;
+        using (var setupConnection = await connectionFactory.CreateConnectionAsync())
+        {
+            using var command = setupConnection.CreateCommand();
+            
+            // Create venue
+            command.CommandText = "INSERT INTO Venues (Name, Address) VALUES ('Test Venue', '123 Test St'); SELECT last_insert_rowid();";
+            venueId = Convert.ToInt32(command.ExecuteScalar());
+            
+            // Create user
+            command.CommandText = "INSERT INTO Users (Name, Email) VALUES ('Test User', 'test@example.com'); SELECT last_insert_rowid();";
+            userId = Convert.ToInt32(command.ExecuteScalar());
+            
+            // Create event
+            command.CommandText = $@"
+                INSERT INTO Events (VenueId, Name, StartsAt, EndsAt, EstimatedAttendance, EventType, GA_Capacity)
+                VALUES ({venueId}, 'Test Event', '{DateTime.UtcNow:o}', '{DateTime.UtcNow.AddHours(2):o}', 100, 'GeneralAdmission', 100);
+                SELECT last_insert_rowid();";
+            eventId = Convert.ToInt32(command.ExecuteScalar());
+            
+            // Insert only pending/failed bookings (no paid bookings)
+            command.CommandText = $@"
+                INSERT INTO Bookings (UserId, EventId, BookingType, PaymentStatus, TotalAmount, CreatedAt)
+                VALUES 
+                    ({userId}, {eventId}, 'GA', 'Pending', 100.00, '{DateTime.UtcNow:o}'),
+                    ({userId}, {eventId}, 'GA', 'Failed', 50.00, '{DateTime.UtcNow.AddHours(1):o}');";
+            command.ExecuteNonQuery();
+        }
+        
+        var repository = new DapperBookingRepository(connectionFactory);
+        
+        // Act
+        var results = await repository.FindBookingsForPaidUsersAtVenueAsync(venueId);
+        
+        // Assert
+        results.Should().BeEmpty(because: "user has no paid bookings at this venue");
+    }
+
+    [TestMethod]
+    public async Task FindBookingsForPaidUsersAtVenueAsync_FiltersBookingsByVenue()
+    {
+        // Arrange
+        var connectionFactory = new SqliteConnectionFactory("Data Source=FindPaidUsers_MultiVenue;Mode=Memory;Cache=Shared");
+        using var keepAlive = await connectionFactory.CreateConnectionAsync();
+        await InitializeDatabaseAsync(connectionFactory);
+        
+        int venue1Id, venue2Id, userId, event1Id, event2Id;
+        using (var setupConnection = await connectionFactory.CreateConnectionAsync())
+        {
+            using var command = setupConnection.CreateCommand();
+            
+            // Create two venues
+            command.CommandText = "INSERT INTO Venues (Name, Address) VALUES ('Venue 1', '123 St'); SELECT last_insert_rowid();";
+            venue1Id = Convert.ToInt32(command.ExecuteScalar());
+            
+            command.CommandText = "INSERT INTO Venues (Name, Address) VALUES ('Venue 2', '456 St'); SELECT last_insert_rowid();";
+            venue2Id = Convert.ToInt32(command.ExecuteScalar());
+            
+            command.CommandText = "INSERT INTO Users (Name, Email) VALUES ('User 1', 'user1@example.com'); SELECT last_insert_rowid();";
+            userId = Convert.ToInt32(command.ExecuteScalar());
+            
+            // Create events at different venues
+            command.CommandText = $@"
+                INSERT INTO Events (VenueId, Name, StartsAt, EndsAt, EstimatedAttendance, EventType, GA_Capacity)
+                VALUES ({venue1Id}, 'Event at Venue 1', '{DateTime.UtcNow:o}', '{DateTime.UtcNow.AddHours(2):o}', 100, 'GeneralAdmission', 100);
+                SELECT last_insert_rowid();";
+            event1Id = Convert.ToInt32(command.ExecuteScalar());
+            
+            command.CommandText = $@"
+                INSERT INTO Events (VenueId, Name, StartsAt, EndsAt, EstimatedAttendance, EventType, GA_Capacity)
+                VALUES ({venue2Id}, 'Event at Venue 2', '{DateTime.UtcNow.AddDays(1):o}', '{DateTime.UtcNow.AddDays(1).AddHours(2):o}', 150, 'GeneralAdmission', 150);
+                SELECT last_insert_rowid();";
+            event2Id = Convert.ToInt32(command.ExecuteScalar());
+            
+            // User1 has booking at Venue1, User2 has booking at Venue2, User3 has no bookings
+            command.CommandText = $@"
+                INSERT INTO Bookings (UserId, EventId, BookingType, PaymentStatus, TotalAmount, CreatedAt)
+                VALUES ({userId}, {event1Id}, 'GA', 'Paid', 100.00, '{DateTime.UtcNow:o}');
+                
+                INSERT INTO Bookings (UserId, EventId, BookingType, PaymentStatus, TotalAmount, CreatedAt)
+                VALUES ({userId}, {event2Id}, 'GA', 'Pending', 150.00, '{DateTime.UtcNow.AddHours(1):o}');";
+            command.ExecuteNonQuery();
+        }
+        
+        var repository = new DapperBookingRepository(connectionFactory);
+        
+        // Act - Query for Venue1 only
+        var results = (await repository.FindBookingsForPaidUsersAtVenueAsync(venue1Id)).ToList();
+        
+        // Assert
+        results.Should().HaveCount(1, because: "User1 has a booking at Venue1");
+        results.Should().Contain(b => b.User.Id == userId);
+    }
+
+    [TestMethod]
+    public async Task FindBookingsForPaidUsersAtVenueAsync_WhenNoBookingsAtVenue_ReturnsEmpty()
+    {
+        // Arrange
+        var connectionFactory = new SqliteConnectionFactory("Data Source=FindPaidUsers_NoBookings;Mode=Memory;Cache=Shared");
+        using var keepAlive = await connectionFactory.CreateConnectionAsync();
+        await InitializeDatabaseAsync(connectionFactory);
+        
+        int venueId;
+        using (var setupConnection = await connectionFactory.CreateConnectionAsync())
+        {
+            using var command = setupConnection.CreateCommand();
+            command.CommandText = "INSERT INTO Venues (Name, Address) VALUES ('Empty Venue', '456 Empty St'); SELECT last_insert_rowid();";
+            venueId = Convert.ToInt32(command.ExecuteScalar());
+        }
+        
+        var repository = new DapperBookingRepository(connectionFactory);
+        
+        // Act
+        var results = await repository.FindBookingsForPaidUsersAtVenueAsync(venueId);
+        
+        // Assert
+        results.Should().BeEmpty(because: "no bookings exist at this venue");
+    }
+
+    [TestMethod]
+    public async Task FindBookingsForPaidUsersAtVenueAsync_IncludesAllBookingTypes()
+    {
+        // Arrange
+        var connectionFactory = new SqliteConnectionFactory("Data Source=FindPaidUsers_AllTypes;Mode=Memory;Cache=Shared");
+        using var keepAlive = await connectionFactory.CreateConnectionAsync();
+        await InitializeDatabaseAsync(connectionFactory);
+        
+        int venueId, userId, event1Id, event2Id, event3Id;
+        using (var setupConnection = await connectionFactory.CreateConnectionAsync())
+        {
+            using var command = setupConnection.CreateCommand();
+            
+            command.CommandText = "INSERT INTO Venues (Name, Address) VALUES ('Multi-Type Venue', '321 Multi St'); SELECT last_insert_rowid();";
+            venueId = Convert.ToInt32(command.ExecuteScalar());
+            
+            command.CommandText = "INSERT INTO Users (Name, Email) VALUES ('User', 'user@example.com'); SELECT last_insert_rowid();";
+            userId = Convert.ToInt32(command.ExecuteScalar());
+            
+            // Create different event types
+            command.CommandText = $@"
+                INSERT INTO Events (VenueId, Name, StartsAt, EndsAt, EstimatedAttendance, EventType, GA_Capacity)
+                VALUES ({venueId}, 'GA Event', '{DateTime.UtcNow:o}', '{DateTime.UtcNow.AddHours(2):o}', 100, 'GeneralAdmission', 100);
+                SELECT last_insert_rowid();";
+            event1Id = Convert.ToInt32(command.ExecuteScalar());
+            
+            command.CommandText = $@"
+                INSERT INTO Events (VenueId, Name, StartsAt, EndsAt, EstimatedAttendance, EventType)
+                VALUES ({venueId}, 'Section Event', '{DateTime.UtcNow.AddDays(1):o}', '{DateTime.UtcNow.AddDays(1).AddHours(2):o}', 200, 'SectionBased');
+                SELECT last_insert_rowid();";
+            event2Id = Convert.ToInt32(command.ExecuteScalar());
+            
+            command.CommandText = $@"
+                INSERT INTO Events (VenueId, Name, StartsAt, EndsAt, EstimatedAttendance, EventType)
+                VALUES ({venueId}, 'Reserved Event', '{DateTime.UtcNow.AddDays(2):o}', '{DateTime.UtcNow.AddDays(2).AddHours(2):o}', 300, 'ReservedSeating');
+                SELECT last_insert_rowid();";
+            event3Id = Convert.ToInt32(command.ExecuteScalar());
+            
+            // User has one paid booking (GA type), plus bookings of other types
+            command.CommandText = $@"
+                INSERT INTO Bookings (UserId, EventId, BookingType, PaymentStatus, TotalAmount, CreatedAt)
+                VALUES 
+                    ({userId}, {event1Id}, 'GA', 'Paid', 100.00, '{DateTime.UtcNow:o}'),
+                    ({userId}, {event2Id}, 'Section', 'Pending', 150.00, '{DateTime.UtcNow.AddHours(1):o}'),
+                    ({userId}, {event3Id}, 'Seat', 'Failed', 200.00, '{DateTime.UtcNow.AddHours(2):o}');";
+            command.ExecuteNonQuery();
+        }
+        
+        var repository = new DapperBookingRepository(connectionFactory);
+        
+        // Act
+        var results = (await repository.FindBookingsForPaidUsersAtVenueAsync(venueId)).ToList();
+        
+        // Assert
+        results.Should().HaveCount(3, because: "user has paid booking, so all their bookings at venue should be included");
+        results.Should().Contain(b => b.BookingType == BookingType.GA && b.PaymentStatus == PaymentStatus.Paid);
+        results.Should().Contain(b => b.BookingType == BookingType.Section && b.PaymentStatus == PaymentStatus.Pending);
+        results.Should().Contain(b => b.BookingType == BookingType.Seat && b.PaymentStatus == PaymentStatus.Failed);
+    }
+
+    [TestMethod]
+    public async Task FindBookingsForPaidUsersAtVenueAsync_OrdersByCreatedAtDescending()
+    {
+        // Arrange
+        var connectionFactory = new SqliteConnectionFactory("Data Source=FindPaidUsers_Ordered;Mode=Memory;Cache=Shared");
+        using var keepAlive = await connectionFactory.CreateConnectionAsync();
+        await InitializeDatabaseAsync(connectionFactory);
+        
+        int venueId, userId, eventId;
+        using (var setupConnection = await connectionFactory.CreateConnectionAsync())
+        {
+            using var command = setupConnection.CreateCommand();
+            
+            command.CommandText = "INSERT INTO Venues (Name, Address) VALUES ('Test Venue', '123 Test St'); SELECT last_insert_rowid();";
+            venueId = Convert.ToInt32(command.ExecuteScalar());
+            
+            command.CommandText = "INSERT INTO Users (Name, Email) VALUES ('User', 'user@example.com'); SELECT last_insert_rowid();";
+            userId = Convert.ToInt32(command.ExecuteScalar());
+            
+            command.CommandText = $@"
+                INSERT INTO Events (VenueId, Name, StartsAt, EndsAt, EstimatedAttendance, EventType, GA_Capacity)
+                VALUES ({venueId}, 'Test Event', '{DateTime.UtcNow:o}', '{DateTime.UtcNow.AddHours(2):o}', 100, 'GeneralAdmission', 100);
+                SELECT last_insert_rowid();";
+            eventId = Convert.ToInt32(command.ExecuteScalar());
+            
+            var now = DateTime.UtcNow;
+            command.CommandText = $@"
+                INSERT INTO Bookings (UserId, EventId, BookingType, PaymentStatus, TotalAmount, CreatedAt)
+                VALUES 
+                    ({userId}, {eventId}, 'GA', 'Paid', 100.00, '{now.AddHours(-3):o}'),
+                    ({userId}, {eventId}, 'GA', 'Pending', 150.00, '{now:o}'),
+                    ({userId}, {eventId}, 'GA', 'Paid', 200.00, '{now.AddHours(-1):o}');";
+            command.ExecuteNonQuery();
+        }
+        
+        var repository = new DapperBookingRepository(connectionFactory);
+        
+        // Act
+        var results = (await repository.FindBookingsForPaidUsersAtVenueAsync(venueId)).ToList();
+        
+        // Assert
+        results.Should().HaveCount(3);
+        results[0].TotalAmount.Should().Be(150.00m, because: "most recent booking should be first");
+        results[1].TotalAmount.Should().Be(200.00m);
+        results[2].TotalAmount.Should().Be(100.00m, because: "oldest booking should be last");
+    }
+
+    [TestMethod]
+    public async Task FindBookingsForPaidUsersAtVenueAsync_LoadsNavigationProperties()
+    {
+        // Arrange
+        var connectionFactory = new SqliteConnectionFactory("Data Source=FindPaidUsers_Navigation;Mode=Memory;Cache=Shared");
+        using var keepAlive = await connectionFactory.CreateConnectionAsync();
+        await InitializeDatabaseAsync(connectionFactory);
+        
+        var (userId, eventId) = await SetupTestDataAsync(connectionFactory);
+        
+        int venueId;
+        using (var setupConnection = await connectionFactory.CreateConnectionAsync())
+        {
+            using var command = setupConnection.CreateCommand();
+            command.CommandText = $"SELECT VenueId FROM Events WHERE Id = {eventId}";
+            venueId = Convert.ToInt32(command.ExecuteScalar());
+            
+            // Insert paid booking
+            command.CommandText = $@"
+                INSERT INTO Bookings (UserId, EventId, BookingType, PaymentStatus, TotalAmount, CreatedAt)
+                VALUES ({userId}, {eventId}, 'GA', 'Paid', 100.00, '{DateTime.UtcNow:o}');";
+            command.ExecuteNonQuery();
+        }
+        
+        var repository = new DapperBookingRepository(connectionFactory);
+        
+        // Act
+        var results = (await repository.FindBookingsForPaidUsersAtVenueAsync(venueId)).ToList();
+        
+        // Assert
+        results.Should().HaveCount(1);
+        var booking = results.First();
+        booking.User.Should().NotBeNull();
+        booking.User.Name.Should().Be("Test User");
+        booking.Event.Should().NotBeNull();
+        booking.Event.Name.Should().Be("Test Event");
+        booking.BookingItems.Should().NotBeNull();
+    }
+
+    #endregion
+
+    #region FindUsersWithoutBookingsInVenueAsync Tests
+
+    [TestMethod]
+    public async Task FindUsersWithoutBookingsInVenueAsync_ReturnsUsersWithNoBookings()
+    {
+        // Arrange
+        var connectionFactory = new SqliteConnectionFactory("Data Source=FindUsersNoBookings;Mode=Memory;Cache=Shared");
+        using var keepAlive = await connectionFactory.CreateConnectionAsync();
+        await InitializeDatabaseAsync(connectionFactory);
+        
+        int venueId, user1Id, user2Id, user3Id, eventId;
+        using (var setupConnection = await connectionFactory.CreateConnectionAsync())
+        {
+            using var command = setupConnection.CreateCommand();
+            
+            // Create venue
+            command.CommandText = "INSERT INTO Venues (Name, Address) VALUES ('Test Venue', '123 Test St'); SELECT last_insert_rowid();";
+            venueId = Convert.ToInt32(command.ExecuteScalar());
+            
+            // Create three users
+            command.CommandText = "INSERT INTO Users (Name, Email) VALUES ('User 1', 'user1@example.com'); SELECT last_insert_rowid();";
+            user1Id = Convert.ToInt32(command.ExecuteScalar());
+            
+            command.CommandText = "INSERT INTO Users (Name, Email) VALUES ('User 2', 'user2@example.com'); SELECT last_insert_rowid();";
+            user2Id = Convert.ToInt32(command.ExecuteScalar());
+            
+            command.CommandText = "INSERT INTO Users (Name, Email) VALUES ('User 3', 'user3@example.com'); SELECT last_insert_rowid();";
+            user3Id = Convert.ToInt32(command.ExecuteScalar());
+            
+            // Create event at venue
+            command.CommandText = $@"
+                INSERT INTO Events (VenueId, Name, StartsAt, EndsAt, EstimatedAttendance, EventType, GA_Capacity)
+                VALUES ({venueId}, 'Test Event', '{DateTime.UtcNow:o}', '{DateTime.UtcNow.AddHours(2):o}', 100, 'GeneralAdmission', 100);
+                SELECT last_insert_rowid();";
+            eventId = Convert.ToInt32(command.ExecuteScalar());
+            
+            // User1 has a booking, User2 and User3 do not
+            command.CommandText = $@"
+                INSERT INTO Bookings (UserId, EventId, BookingType, PaymentStatus, TotalAmount, CreatedAt)
+                VALUES ({user1Id}, {eventId}, 'GA', 'Paid', 100.00, '{DateTime.UtcNow:o}');";
+            command.ExecuteNonQuery();
+        }
+        
+        var repository = new DapperBookingRepository(connectionFactory);
+        
+        // Act
+        var results = (await repository.FindUsersWithoutBookingsInVenueAsync(venueId)).ToList();
+        
+        // Assert
+        results.Should().NotBeNull();
+        results.Should().HaveCount(2, because: "User2 and User3 have no bookings at this venue");
+        results.Should().Contain(user2Id);
+        results.Should().Contain(user3Id);
+        results.Should().NotContain(user1Id, because: "User1 has a booking at this venue");
+    }
+
+    [TestMethod]
+    public async Task FindUsersWithoutBookingsInVenueAsync_AllUsersHaveBookings_ReturnsEmpty()
+    {
+        // Arrange
+        var connectionFactory = new SqliteConnectionFactory("Data Source=FindUsersNoBookings_AllBooked;Mode=Memory;Cache=Shared");
+        using var keepAlive = await connectionFactory.CreateConnectionAsync();
+        await InitializeDatabaseAsync(connectionFactory);
+        
+        int venueId, userId, eventId;
+        using (var setupConnection = await connectionFactory.CreateConnectionAsync())
+        {
+            using var command = setupConnection.CreateCommand();
+            
+            command.CommandText = "INSERT INTO Venues (Name, Address) VALUES ('Test Venue', '123 Test St'); SELECT last_insert_rowid();";
+            venueId = Convert.ToInt32(command.ExecuteScalar());
+            
+            command.CommandText = "INSERT INTO Users (Name, Email) VALUES ('User', 'user@example.com'); SELECT last_insert_rowid();";
+            userId = Convert.ToInt32(command.ExecuteScalar());
+            
+            command.CommandText = $@"
+                INSERT INTO Events (VenueId, Name, StartsAt, EndsAt, EstimatedAttendance, EventType, GA_Capacity)
+                VALUES ({venueId}, 'Test Event', '{DateTime.UtcNow:o}', '{DateTime.UtcNow.AddHours(2):o}', 100, 'GeneralAdmission', 100);
+                SELECT last_insert_rowid();";
+            eventId = Convert.ToInt32(command.ExecuteScalar());
+            
+            // All users have bookings
+            command.CommandText = $@"
+                INSERT INTO Bookings (UserId, EventId, BookingType, PaymentStatus, TotalAmount, CreatedAt)
+                VALUES ({userId}, {eventId}, 'GA', 'Paid', 100.00, '{DateTime.UtcNow:o}');";
+            command.ExecuteNonQuery();
+        }
+        
+        var repository = new DapperBookingRepository(connectionFactory);
+        
+        // Act
+        var results = await repository.FindUsersWithoutBookingsInVenueAsync(venueId);
+        
+        // Assert
+        results.Should().NotBeNull();
+        results.Should().BeEmpty(because: "all users have bookings at this venue");
+    }
+
+    [TestMethod]
+    public async Task FindUsersWithoutBookingsInVenueAsync_NoUsersExist_ReturnsEmpty()
+    {
+        // Arrange
+        var connectionFactory = new SqliteConnectionFactory("Data Source=FindUsersNoBookings_NoUsers;Mode=Memory;Cache=Shared");
+        using var keepAlive = await connectionFactory.CreateConnectionAsync();
+        await InitializeDatabaseAsync(connectionFactory);
+        
+        int venueId;
+        using (var setupConnection = await connectionFactory.CreateConnectionAsync())
+        {
+            using var command = setupConnection.CreateCommand();
+            command.CommandText = "INSERT INTO Venues (Name, Address) VALUES ('Empty Venue', '456 Empty St'); SELECT last_insert_rowid();";
+            venueId = Convert.ToInt32(command.ExecuteScalar());
+        }
+        
+        var repository = new DapperBookingRepository(connectionFactory);
+        
+        // Act
+        var results = await repository.FindUsersWithoutBookingsInVenueAsync(venueId);
+        
+        // Assert
+        results.Should().NotBeNull();
+        results.Should().BeEmpty(because: "no users exist in the database");
+    }
+
+    [TestMethod]
+    public async Task FindUsersWithoutBookingsInVenueAsync_VenueHasNoEvents_ReturnsAllUsers()
+    {
+        // Arrange
+        var connectionFactory = new SqliteConnectionFactory("Data Source=FindUsersNoBookings_NoEvents;Mode=Memory;Cache=Shared");
+        using var keepAlive = await connectionFactory.CreateConnectionAsync();
+        await InitializeDatabaseAsync(connectionFactory);
+        
+        int venueId, user1Id, user2Id;
+        using (var setupConnection = await connectionFactory.CreateConnectionAsync())
+        {
+            using var command = setupConnection.CreateCommand();
+                
+            command.CommandText = "INSERT INTO Venues (Name, Address) VALUES ('Empty Venue', '789 Empty St'); SELECT last_insert_rowid();";
+            venueId = Convert.ToInt32(command.ExecuteScalar());
+                
+            command.CommandText = "INSERT INTO Users (Name, Email) VALUES ('User 1', 'user1@example.com'); SELECT last_insert_rowid();";
+            user1Id = Convert.ToInt32(command.ExecuteScalar());
+                
+            command.CommandText = "INSERT INTO Users (Name, Email) VALUES ('User 2', 'user2@example.com'); SELECT last_insert_rowid();";
+            user2Id = Convert.ToInt32(command.ExecuteScalar());
+        }
+        
+        var repository = new DapperBookingRepository(connectionFactory);
+        
+        // Act
+        var results = (await repository.FindUsersWithoutBookingsInVenueAsync(venueId)).ToList();
+        
+        // Assert
+        results.Should().HaveCount(2, because: "no events at venue means no users have bookings");
+        results.Should().Contain(user1Id);
+        results.Should().Contain(user2Id);
+    }
+
+    [TestMethod]
+    public async Task FindUsersWithoutBookingsInVenueAsync_MultipleVenues_FiltersCorrectly()
+    {
+        // Arrange
+        var connectionFactory = new SqliteConnectionFactory("Data Source=FindUsersNoBookings_MultiVenue;Mode=Memory;Cache=Shared");
+        using var keepAlive = await connectionFactory.CreateConnectionAsync();
+        await InitializeDatabaseAsync(connectionFactory);
+        
+        int venue1Id, venue2Id, user1Id, user2Id, user3Id, event1Id, event2Id;
+        using (var setupConnection = await connectionFactory.CreateConnectionAsync())
+        {
+            using var command = setupConnection.CreateCommand();
+                
+                // Create two venues
+                command.CommandText = "INSERT INTO Venues (Name, Address) VALUES ('Venue 1', '123 St'); SELECT last_insert_rowid();";
+                venue1Id = Convert.ToInt32(command.ExecuteScalar());
+                
+                command.CommandText = "INSERT INTO Venues (Name, Address) VALUES ('Venue 2', '456 St'); SELECT last_insert_rowid();";
+                venue2Id = Convert.ToInt32(command.ExecuteScalar());
+                
+                // Create three users
+                command.CommandText = "INSERT INTO Users (Name, Email) VALUES ('User 1', 'user1@example.com'); SELECT last_insert_rowid();";
+                user1Id = Convert.ToInt32(command.ExecuteScalar());
+                
+                command.CommandText = "INSERT INTO Users (Name, Email) VALUES ('User 2', 'user2@example.com'); SELECT last_insert_rowid();";
+                user2Id = Convert.ToInt32(command.ExecuteScalar());
+                
+                command.CommandText = "INSERT INTO Users (Name, Email) VALUES ('User 3', 'user3@example.com'); SELECT last_insert_rowid();";
+                user3Id = Convert.ToInt32(command.ExecuteScalar());
+                
+                // Create events at different venues
+                command.CommandText = $@"
+                    INSERT INTO Events (VenueId, Name, StartsAt, EndsAt, EstimatedAttendance, EventType, GA_Capacity)
+                    VALUES ({venue1Id}, 'Event at Venue 1', '{DateTime.UtcNow:o}', '{DateTime.UtcNow.AddHours(2):o}', 100, 'GeneralAdmission', 100);
+                    SELECT last_insert_rowid();";
+                event1Id = Convert.ToInt32(command.ExecuteScalar());
+                
+                command.CommandText = $@"
+                    INSERT INTO Events (VenueId, Name, StartsAt, EndsAt, EstimatedAttendance, EventType, GA_Capacity)
+                    VALUES ({venue2Id}, 'Event at Venue 2', '{DateTime.UtcNow.AddDays(1):o}', '{DateTime.UtcNow.AddDays(1).AddHours(2):o}', 150, 'GeneralAdmission', 150);
+                    SELECT last_insert_rowid();";
+                event2Id = Convert.ToInt32(command.ExecuteScalar());
+                
+                // User1 has booking at Venue1, User2 has booking at Venue2, User3 has no bookings
+                command.CommandText = $@"
+                    INSERT INTO Bookings (UserId, EventId, BookingType, PaymentStatus, TotalAmount, CreatedAt)
+                    VALUES ({user1Id}, {event1Id}, 'GA', 'Paid', 100.00, '{DateTime.UtcNow:o}');
+                    
+                    INSERT INTO Bookings (UserId, EventId, BookingType, PaymentStatus, TotalAmount, CreatedAt)
+                    VALUES ({user2Id}, {event2Id}, 'GA', 'Paid', 150.00, '{DateTime.UtcNow.AddHours(1):o}');";
+                command.ExecuteNonQuery();
+        }
+        
+        var repository = new DapperBookingRepository(connectionFactory);
+        
+        // Act - Query for Venue1
+        var results = (await repository.FindUsersWithoutBookingsInVenueAsync(venue1Id)).ToList();
+        
+        // Assert
+        results.Should().HaveCount(2, because: "User2 and User3 have no bookings at Venue1");
+        results.Should().Contain(user2Id);
+        results.Should().Contain(user3Id);
+        results.Should().NotContain(user1Id, because: "User1 has a booking at Venue1");
+    }
+
+    [TestMethod]
+    public async Task FindUsersWithoutBookingsInVenueAsync_OrdersByUserId()
+    {
+        // Arrange
+        var connectionFactory = new SqliteConnectionFactory("Data Source=FindUsersNoBookings_Ordered;Mode=Memory;Cache=Shared");
+        using var keepAlive = await connectionFactory.CreateConnectionAsync();
+        await InitializeDatabaseAsync(connectionFactory);
+        
+        int venueId, user1Id, user2Id, user3Id;
+        using (var setupConnection = await connectionFactory.CreateConnectionAsync())
+        {
+            using var command = setupConnection.CreateCommand();
+                
+                command.CommandText = "INSERT INTO Venues (Name, Address) VALUES ('Test Venue', '123 Test St'); SELECT last_insert_rowid();";
+                venueId = Convert.ToInt32(command.ExecuteScalar());
+                
+                // Create users (they will be inserted in order but IDs might vary)
+                command.CommandText = "INSERT INTO Users (Name, Email) VALUES ('User 1', 'user1@example.com'); SELECT last_insert_rowid();";
+                user1Id = Convert.ToInt32(command.ExecuteScalar());
+                
+                command.CommandText = "INSERT INTO Users (Name, Email) VALUES ('User 2', 'user2@example.com'); SELECT last_insert_rowid();";
+                user2Id = Convert.ToInt32(command.ExecuteScalar());
+                
+                command.CommandText = "INSERT INTO Users (Name, Email) VALUES ('User 3', 'user3@example.com'); SELECT last_insert_rowid();";
+                user3Id = Convert.ToInt32(command.ExecuteScalar());
+        }
+        
+        var repository = new DapperBookingRepository(connectionFactory);
+        
+        // Act
+        var results = (await repository.FindUsersWithoutBookingsInVenueAsync(venueId)).ToList();
+        
+        // Assert
+        results.Should().HaveCount(3);
+        results.Should().BeInAscendingOrder(because: "results should be ordered by user ID");
+    }
+
+    [TestMethod]
+    public async Task FindUsersWithoutBookingsInVenueAsync_IgnoresBookingStatus()
+    {
+        // Arrange
+        var connectionFactory = new SqliteConnectionFactory("Data Source=FindUsersNoBookings_AnyStatus;Mode=Memory;Cache=Shared");
+        using var keepAlive = await connectionFactory.CreateConnectionAsync();
+        await InitializeDatabaseAsync(connectionFactory);
+        
+        int venueId, user1Id, user2Id, user3Id, eventId;
+        using (var setupConnection = await connectionFactory.CreateConnectionAsync())
+        {
+            using var command = setupConnection.CreateCommand();
+                
+                command.CommandText = "INSERT INTO Venues (Name, Address) VALUES ('Test Venue', '123 Test St'); SELECT last_insert_rowid();";
+                venueId = Convert.ToInt32(command.ExecuteScalar());
+                
+                command.CommandText = "INSERT INTO Users (Name, Email) VALUES ('User 1', 'user1@example.com'); SELECT last_insert_rowid();";
+                user1Id = Convert.ToInt32(command.ExecuteScalar());
+                
+                command.CommandText = "INSERT INTO Users (Name, Email) VALUES ('User 2', 'user2@example.com'); SELECT last_insert_rowid();";
+                user2Id = Convert.ToInt32(command.ExecuteScalar());
+                
+                command.CommandText = "INSERT INTO Users (Name, Email) VALUES ('User 3', 'user3@example.com'); SELECT last_insert_rowid();";
+                user3Id = Convert.ToInt32(command.ExecuteScalar());
+                
+                command.CommandText = $@"
+                    INSERT INTO Events (VenueId, Name, StartsAt, EndsAt, EstimatedAttendance, EventType, GA_Capacity)
+                    VALUES ({venueId}, 'Test Event', '{DateTime.UtcNow:o}', '{DateTime.UtcNow.AddHours(2):o}', 100, 'GeneralAdmission', 100);
+                    SELECT last_insert_rowid();";
+                eventId = Convert.ToInt32(command.ExecuteScalar());
+                
+                // User1 has Paid booking, User2 has Failed booking, User3 has no booking
+                command.CommandText = $@"
+                    INSERT INTO Bookings (UserId, EventId, BookingType, PaymentStatus, TotalAmount, CreatedAt)
+                    VALUES ({user1Id}, {eventId}, 'GA', 'Paid', 100.00, '{DateTime.UtcNow:o}');
+                    
+                    INSERT INTO Bookings (UserId, EventId, BookingType, PaymentStatus, TotalAmount, CreatedAt)
+                    VALUES ({user2Id}, {eventId}, 'GA', 'Failed', 50.00, '{DateTime.UtcNow.AddHours(1):o}');";
+                command.ExecuteNonQuery();
+        }
+        
+        var repository = new DapperBookingRepository(connectionFactory);
+        
+        // Act
+        var results = (await repository.FindUsersWithoutBookingsInVenueAsync(venueId)).ToList();
+        
+        // Assert
+        results.Should().HaveCount(1, because: "only User3 has no bookings (regardless of status)");
+        results.Should().Contain(user3Id);
+        results.Should().NotContain(user1Id, because: "User1 has a paid booking");
+        results.Should().NotContain(user2Id, because: "User2 has a failed booking (still counts as a booking)");
+    }
+
+    #endregion
+
     #region Helper Methods
 
     /// <summary>

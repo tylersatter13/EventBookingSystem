@@ -32,5 +32,23 @@ namespace EventBookingSystem.Application.Services
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>The booking DTO if found, null otherwise.</returns>
         Task<BookingDto?> GetBookingByIdAsync(int bookingId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Finds bookings for users who have at least one successfully paid booking at the specified venue.
+        /// Returns all bookings (paid and unpaid) for qualifying users at the specified venue.
+        /// </summary>
+        /// <param name="venueId">The ID of the venue.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A collection of booking DTOs for users with at least one paid booking at the venue.</returns>
+        Task<IEnumerable<BookingDto>> GetBookingsForPaidUsersAtVenueAsync(int venueId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Finds all user IDs who have no bookings whatsoever at the specified venue.
+        /// Useful for identifying potential customers for targeted marketing campaigns.
+        /// </summary>
+        /// <param name="venueId">The ID of the venue.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A collection of user IDs with no bookings at the venue.</returns>
+        Task<IEnumerable<int>> GetUsersWithoutBookingsAtVenueAsync(int venueId, CancellationToken cancellationToken = default);
     }
 }
