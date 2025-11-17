@@ -7,6 +7,8 @@ namespace EventBookingSystem.Domain.Entities
 {
     public class Venue
     {
+
+        public int Id { get; set; }
         /// <summary>
         /// Gets or sets the name associated with this instance.
         /// </summary>
