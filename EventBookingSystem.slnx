@@ -2,6 +2,7 @@
   <Project Path="src/EventBookingSystem.Application/EventBookingSystem.Application.csproj" Id="e409d248-3dc0-469c-8a3e-fb3e0cd1e57a" />
   <Project Path="src/EventBookingSystem.Domain/EventBookingSystem.Domain.csproj" Id="38f8a8e8-ca73-455f-aac6-3d26318f7366" />
   <Project Path="src/EventBookingSystem.Infrastructure/EventBookingSystem.Infrastructure.csproj" Id="8306621d-22b0-4140-aab4-7047fe221585" />
+  <Project Path="tests/EventBookingSystem.Application.IntegrationTests/EventBookingSystem.Application.IntegrationTests.csproj" />
   <Project Path="tests/EventBookingSystem.Application.Tests/EventBookingSystem.Application.Tests.csproj" Id="4fccb454-34bd-43e9-a8c5-89bf211496b4" />
   <Project Path="tests/EventBookingSystem.Domain.Tests/EventBookingSystem.Domain.Tests.csproj" Id="3134da85-1d31-43aa-8732-c0d3bf2fcb7c" />
   <Project Path="tests/EventBookingSystem.Infrastructure.Tests/EventBookingSystem.Infrastructure.Tests.csproj" Id="493769f8-a272-43f0-9cdc-5905e07a8f74" />

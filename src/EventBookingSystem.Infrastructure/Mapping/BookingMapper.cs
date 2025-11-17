@@ -41,7 +41,7 @@ public static class BookingMapper
             PaymentStatus = Enum.Parse<PaymentStatus>(dto.PaymentStatus),
             TotalAmount = dto.TotalAmount,
             CreatedAt = DateTime.Parse(dto.CreatedAt),
-            BookingItems = new List<BookingItem>()
+           // BookingItems = new List<BookingItem>()
         };
     }
 

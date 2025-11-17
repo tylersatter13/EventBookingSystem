@@ -36,12 +36,6 @@ public class DapperEventRepository : IEventRepository
 
         try
         {
-            // Ensure VenueId is set from Venue if provided
-            if (entity.Venue != null && entity.VenueId == 0)
-            {
-                entity.VenueId = entity.Venue.Id;
-            }
-
             var dto = EventMapper.ToDto(entity);
 
             // Insert the main event record
@@ -53,21 +47,6 @@ public class DapperEventRepository : IEventRepository
             await SaveRelatedDataAsync(connection, transaction, entity);
 
             transaction.Commit();
-            
-            // Load the venue if VenueId is set but Venue is null
-            if (entity.Venue == null && entity.VenueId > 0)
-            {
-                var venueSql = "SELECT * FROM Venues WHERE Id = @Id";
-                var venueDto = await connection.QueryFirstOrDefaultAsync<VenueDto>(
-                    venueSql, 
-                    new { Id = entity.VenueId });
-                
-                if (venueDto != null)
-                {
-                    entity.Venue = VenueMapper.ToDomain(venueDto);
-                }
-            }
-            
             return entity;
         }
         catch
@@ -111,6 +90,14 @@ public class DapperEventRepository : IEventRepository
             return null;
 
         var eventBase = EventMapper.ToDomain(dto);
+
+        // Load Venue navigation property
+        var venueSql = "SELECT * FROM Venues WHERE Id = @Id";
+        var venueDto = await connection.QueryFirstOrDefaultAsync<VenueDto>(venueSql, new { Id = dto.VenueId });
+        if (venueDto != null)
+        {
+            eventBase.Venue = VenueMapper.ToDomain(venueDto);
+        }
 
         // Load related data based on event type
         await LoadRelatedDataAsync(connection, eventBase);
@@ -231,22 +218,35 @@ public class DapperEventRepository : IEventRepository
 
         try
         {
-            // Delete existing seats
-            var deleteSql = "DELETE FROM EventSeats WHERE EventId = @EventId";
-            await connection.ExecuteAsync(deleteSql, new { EventId = eventId }, transaction);
-
-            // Insert new seats
-            var insertSql = @"
-                INSERT INTO EventSeats 
-                (EventId, VenueSeatId, Status)
-                VALUES 
-                (@EventId, @VenueSeatId, @Status)";
-
+           
             foreach (var seat in seats)
             {
-                var dto = EventSeatMapper.ToDto(seat);
-                dto.EventId = eventId; // Set the EventId
-                await connection.ExecuteAsync(insertSql, dto, transaction);
+                if (seat.Id > 0)
+                {
+                    // Update existing seat
+                    var updateSql = @"
+                        UPDATE EventSeats 
+                        SET Status = @Status
+                        WHERE Id = @Id";
+                    
+                    var dto = EventSeatMapper.ToDto(seat);
+                    await connection.ExecuteAsync(updateSql, dto, transaction);
+                }
+                else
+                {
+                    // Insert new seat
+                    var insertSql = @"
+                        INSERT INTO EventSeats 
+                        (EventId, VenueSeatId, Status)
+                        VALUES 
+                        (@EventId, @VenueSeatId, @Status);
+                        SELECT last_insert_rowid();";
+                    
+                    var dto = EventSeatMapper.ToDto(seat);
+                    dto.EventId = eventId;
+                    dto.Id = await connection.ExecuteScalarAsync<int>(insertSql, dto, transaction);
+                    seat.Id = dto.Id;
+                }
             }
 
             transaction.Commit();
@@ -393,19 +393,38 @@ public class DapperEventRepository : IEventRepository
         int eventId, 
         IEnumerable<EventSectionInventory> inventories)
     {
-        var insertSql = @"
-            INSERT INTO EventSectionInventories 
-            (EventId, VenueSectionId, Capacity, Booked, Price, AllocationMode)
-            VALUES 
-            (@EventId, @VenueSectionId, @Capacity, @Booked, @Price, @AllocationMode);
-            SELECT last_insert_rowid();";
-
+        
         foreach (var inventory in inventories)
         {
-            var dto = EventSectionInventoryMapper.ToDto(inventory);
-            dto.EventId = eventId;
-            dto.Id = await connection.ExecuteScalarAsync<int>(insertSql, dto, transaction);
-            inventory.Id = dto.Id;
+            if (inventory.Id > 0)
+            {
+                // Update existing inventory
+                var updateSql = @"
+                    UPDATE EventSectionInventories 
+                    SET Capacity = @Capacity, 
+                        Booked = @Booked, 
+                        Price = @Price, 
+                        AllocationMode = @AllocationMode
+                    WHERE Id = @Id";
+                
+                var dto = EventSectionInventoryMapper.ToDto(inventory);
+                await connection.ExecuteAsync(updateSql, dto, transaction);
+            }
+            else
+            {
+                // Insert new inventory
+                var insertSql = @"
+                    INSERT INTO EventSectionInventories 
+                    (EventId, VenueSectionId, Capacity, Booked, Price, AllocationMode)
+                    VALUES 
+                    (@EventId, @VenueSectionId, @Capacity, @Booked, @Price, @AllocationMode);
+                    SELECT last_insert_rowid();";
+                
+                var dto = EventSectionInventoryMapper.ToDto(inventory);
+                dto.EventId = eventId;
+                dto.Id = await connection.ExecuteScalarAsync<int>(insertSql, dto, transaction);
+                inventory.Id = dto.Id;
+            }
         }
     }
 
@@ -414,20 +433,35 @@ public class DapperEventRepository : IEventRepository
         IDbTransaction transaction, 
         int eventId, 
         IEnumerable<EventSeat> seats)
-    {
-        var insertSql = @"
-            INSERT INTO EventSeats 
-            (EventId, VenueSeatId, Status)
-            VALUES 
-            (@EventId, @VenueSeatId, @Status);
-            SELECT last_insert_rowid();";
-
+    {        
         foreach (var seat in seats)
         {
-            var dto = EventSeatMapper.ToDto(seat);
-            dto.EventId = eventId;
-            dto.Id = await connection.ExecuteScalarAsync<int>(insertSql, dto, transaction);
-            seat.Id = dto.Id;
+            if (seat.Id > 0)
+            {
+                // Update existing seat
+                var updateSql = @"
+                    UPDATE EventSeats 
+                    SET Status = @Status
+                    WHERE Id = @Id";
+                
+                var dto = EventSeatMapper.ToDto(seat);
+                await connection.ExecuteAsync(updateSql, dto, transaction);
+            }
+            else
+            {
+                // Insert new seat
+                var insertSql = @"
+                    INSERT INTO EventSeats 
+                    (EventId, VenueSeatId, Status)
+                    VALUES 
+                    (@EventId, @VenueSeatId, @Status);
+                    SELECT last_insert_rowid();";
+                
+                var dto = EventSeatMapper.ToDto(seat);
+                dto.EventId = eventId;
+                dto.Id = await connection.ExecuteScalarAsync<int>(insertSql, dto, transaction);
+                seat.Id = dto.Id;
+            }
         }
     }
 

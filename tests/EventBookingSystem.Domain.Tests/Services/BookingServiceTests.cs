@@ -44,7 +44,7 @@ namespace EventBookingSystem.Domain.Tests.Services
             booking.BookingType.Should().Be(BookingType.GA);
             booking.TotalAmount.Should().Be(100m); // 2 * 50
             booking.PaymentStatus.Should().Be(PaymentStatus.Pending);
-            booking.BookingItems.Should().HaveCount(2);
+            booking.BookingItems.Should().BeEmpty();
         }
 
         [TestMethod]

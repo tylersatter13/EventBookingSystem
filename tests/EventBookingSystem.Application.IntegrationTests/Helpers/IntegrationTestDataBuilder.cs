@@ -89,6 +89,7 @@ namespace EventBookingSystem.Application.IntegrationTests.Helpers
 
         /// <summary>
         /// Creates a section-based event.
+        /// NOTE: VenueSection navigation properties should be set AFTER venue is saved to database.
         /// </summary>
         public static SectionBasedEvent CreateSectionBasedEvent(
             int id = 1,
@@ -112,8 +113,9 @@ namespace EventBookingSystem.Application.IntegrationTests.Helpers
                 {
                     VenueSectionId = sectionId,
                     Capacity = capacity,
-                    Price = price,
-                    VenueSection = new VenueSection { Id = sectionId, Name = $"Section {sectionId}" }
+                    Price = price
+                    // DO NOT set VenueSection navigation property here
+                    // It will cause FK constraint errors since these are dummy objects
                 });
             }
 
@@ -122,6 +124,7 @@ namespace EventBookingSystem.Application.IntegrationTests.Helpers
 
         /// <summary>
         /// Creates a reserved seating event.
+        /// NOTE: VenueSeat navigation properties should be set AFTER venue is saved to database.
         /// </summary>
         public static ReservedSeatingEvent CreateReservedSeatingEvent(
             int id = 1,
@@ -145,13 +148,9 @@ namespace EventBookingSystem.Application.IntegrationTests.Helpers
                 {
                     Id = i,
                     VenueSeatId = i,
-                    Status = SeatStatus.Available,
-                    VenueSeat = new VenueSeat
-                    {
-                        Id = i,
-                        Row = $"{(char)('A' + (i - 1) / 10)}",
-                        SeatNumber = ((i - 1) % 10 + 1).ToString()
-                    }
+                    Status = SeatStatus.Available
+                    // DO NOT set VenueSeat navigation property here
+                    // It will cause FK constraint errors since these are dummy objects
                 });
             }
 

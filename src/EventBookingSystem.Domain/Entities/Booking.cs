@@ -9,6 +9,6 @@ namespace EventBookingSystem.Domain.Entities
         public DateTime CreatedAt { get; set; }
         public User User { get; set; }
         public EventBase Event { get; set; }
-        public ICollection<BookingItem> BookingItems { get; set; }
+        public ICollection<BookingItem>? BookingItems { get; set; }
     }
 }

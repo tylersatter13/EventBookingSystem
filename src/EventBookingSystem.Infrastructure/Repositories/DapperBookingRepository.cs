@@ -38,7 +38,7 @@ public class DapperBookingRepository : IBookingRepository
         // GA (General Admission) bookings don't have booking items - capacity tracked on event
         // Section bookings require booking items with EventSectionInventoryId set
         // Seat bookings require booking items with EventSeatId set
-        if (entity.BookingItems != null && entity.BookingItems.Any())
+       if (entity.BookingItems != null && entity.BookingItems.Any())
         {
             foreach (var item in entity.BookingItems)
             {
@@ -156,9 +156,9 @@ public class DapperBookingRepository : IBookingRepository
         }
 
         // Load booking items
-        var itemsSql = "SELECT * FROM BookingItems WHERE BookingId = @BookingId";
-        var itemDtos = await connection.QueryAsync<BookingItemDto>(itemsSql, new { BookingId = dto.Id });
-        booking.BookingItems = itemDtos.Select(BookingItemMapper.ToDomain).ToList();
+         var itemsSql = "SELECT * FROM BookingItems WHERE BookingId = @BookingId";
+         var itemDtos = await connection.QueryAsync<BookingItemDto>(itemsSql, new { BookingId = dto.Id });
+         booking.BookingItems = itemDtos.Select(BookingItemMapper.ToDomain).ToList();
 
         return booking;
     }

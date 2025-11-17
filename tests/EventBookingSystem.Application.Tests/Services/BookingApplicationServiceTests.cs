@@ -109,7 +109,7 @@ namespace EventBookingSystem.Application.Tests.Services
                 .ReturnsAsync(user);
 
             _mockEventRepository
-                .Setup(x => x.GetByIdAsync(eventId, It.IsAny<CancellationToken>()))
+                .Setup(x => x.GetByIdWithDetailsAsync(eventId, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(evnt);
 
             _mockVenueRepository
@@ -129,10 +129,6 @@ namespace EventBookingSystem.Application.Tests.Services
                 .ReturnsAsync(expectedBooking);
 
             _mockEventRepository
-                .Setup(x => x.AddAsync(evnt, It.IsAny<CancellationToken>()))
-                .ReturnsAsync(evnt);
-
-            _mockEventRepository
                 .Setup(x => x.UpdateAsync(evnt, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(evnt);
 
@@ -148,7 +144,7 @@ namespace EventBookingSystem.Application.Tests.Services
 
             // Verify all required calls were made
             _mockUserRepository.Verify(x => x.GetByIdAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
-            _mockEventRepository.Verify(x => x.GetByIdAsync(eventId, It.IsAny<CancellationToken>()), Times.Once);
+            _mockEventRepository.Verify(x => x.GetByIdWithDetailsAsync(eventId, It.IsAny<CancellationToken>()), Times.Once);
             _mockVenueRepository.Verify(x => x.GetByIdAsync(venueId, It.IsAny<CancellationToken>()), Times.Once);
             _mockBookingService.Verify(x => x.ValidateBooking(user, evnt, It.IsAny<ReservationRequest>()), Times.Once);
             _mockBookingService.Verify(x => x.CreateBooking(user, evnt, It.IsAny<ReservationRequest>()), Times.Once);
@@ -181,7 +177,7 @@ namespace EventBookingSystem.Application.Tests.Services
 
             // Verify only user lookup was attempted
             _mockUserRepository.Verify(x => x.GetByIdAsync(999, It.IsAny<CancellationToken>()), Times.Once);
-            _mockEventRepository.Verify(x => x.GetByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+            _mockEventRepository.Verify(x => x.GetByIdWithDetailsAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
             _mockBookingRepository.Verify(x => x.AddAsync(It.IsAny<Booking>(), It.IsAny<CancellationToken>()), Times.Never);
         }
 
@@ -209,7 +205,7 @@ namespace EventBookingSystem.Application.Tests.Services
                 .ReturnsAsync(user);
 
             _mockEventRepository
-                .Setup(x => x.GetByIdAsync(999, It.IsAny<CancellationToken>()))
+                .Setup(x => x.GetByIdWithDetailsAsync(999, It.IsAny<CancellationToken>()))
                 .ReturnsAsync((EventBase)null);
 
             // Act
@@ -223,7 +219,7 @@ namespace EventBookingSystem.Application.Tests.Services
 
             // Verify user and event lookups were attempted
             _mockUserRepository.Verify(x => x.GetByIdAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
-            _mockEventRepository.Verify(x => x.GetByIdAsync(999, It.IsAny<CancellationToken>()), Times.Once);
+            _mockEventRepository.Verify(x => x.GetByIdWithDetailsAsync(999, It.IsAny<CancellationToken>()), Times.Once);
             _mockVenueRepository.Verify(x => x.GetByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
             _mockBookingRepository.Verify(x => x.AddAsync(It.IsAny<Booking>(), It.IsAny<CancellationToken>()), Times.Never);
         }
@@ -264,7 +260,7 @@ namespace EventBookingSystem.Application.Tests.Services
                 .ReturnsAsync(user);
 
             _mockEventRepository
-                .Setup(x => x.GetByIdAsync(eventId, It.IsAny<CancellationToken>()))
+                .Setup(x => x.GetByIdWithDetailsAsync(eventId, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(evnt);
 
             _mockVenueRepository
@@ -282,7 +278,7 @@ namespace EventBookingSystem.Application.Tests.Services
 
             // Verify lookups were attempted in order
             _mockUserRepository.Verify(x => x.GetByIdAsync(userId, It.IsAny<CancellationToken>()), Times.Once);
-            _mockEventRepository.Verify(x => x.GetByIdAsync(eventId, It.IsAny<CancellationToken>()), Times.Once);
+            _mockEventRepository.Verify(x => x.GetByIdWithDetailsAsync(eventId, It.IsAny<CancellationToken>()), Times.Once);
             _mockVenueRepository.Verify(x => x.GetByIdAsync(venueId, It.IsAny<CancellationToken>()), Times.Once);
             _mockBookingRepository.Verify(x => x.AddAsync(It.IsAny<Booking>(), It.IsAny<CancellationToken>()), Times.Never);
         }
@@ -345,7 +341,7 @@ namespace EventBookingSystem.Application.Tests.Services
                 .ReturnsAsync(user);
 
             _mockEventRepository
-                .Setup(x => x.GetByIdAsync(eventId, It.IsAny<CancellationToken>()))
+                .Setup(x => x.GetByIdWithDetailsAsync(eventId, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(evnt);
 
             _mockVenueRepository
@@ -452,7 +448,7 @@ namespace EventBookingSystem.Application.Tests.Services
                 .ReturnsAsync(user);
 
             _mockEventRepository
-                .Setup(x => x.GetByIdAsync(eventId, It.IsAny<CancellationToken>()))
+                .Setup(x => x.GetByIdWithDetailsAsync(eventId, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(evnt);
 
             _mockVenueRepository
@@ -471,9 +467,6 @@ namespace EventBookingSystem.Application.Tests.Services
                 .Setup(x => x.AddAsync(It.IsAny<Booking>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(expectedBooking);
 
-            _mockEventRepository
-                .Setup(x => x.AddAsync(evnt, It.IsAny<CancellationToken>()))
-                .ReturnsAsync(evnt);
             _mockEventRepository
                 .Setup(x => x.UpdateAsync(evnt, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(evnt);
@@ -575,7 +568,7 @@ namespace EventBookingSystem.Application.Tests.Services
                 .ReturnsAsync(user);
 
             _mockEventRepository
-                .Setup(x => x.GetByIdAsync(eventId, It.IsAny<CancellationToken>()))
+                .Setup(x => x.GetByIdWithDetailsAsync(eventId, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(evnt);
 
             _mockVenueRepository
@@ -595,11 +588,8 @@ namespace EventBookingSystem.Application.Tests.Services
                 .ReturnsAsync(expectedBooking);
 
             _mockEventRepository
-                .Setup(x => x.AddAsync(evnt, It.IsAny<CancellationToken>()))
+                .Setup(x => x.UpdateAsync(evnt, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(evnt);
-            _mockEventRepository
-               .Setup(x => x.UpdateAsync(evnt, It.IsAny<CancellationToken>()))
-               .ReturnsAsync(evnt);
 
             // Act
             var result = await _service.CreateBookingAsync(command);
@@ -619,7 +609,7 @@ namespace EventBookingSystem.Application.Tests.Services
         }
 
         [TestMethod]
-        public async Task CreateBookingAsync_RepositoryAddFails_ShouldReturnUnsuccessul()
+        public async Task CreateBookingAsync_RepositoryAddFails_ShouldReturnUnsuccessful()
         {
             // Arrange
             var userId = 1;
@@ -676,7 +666,7 @@ namespace EventBookingSystem.Application.Tests.Services
                 .ReturnsAsync(user);
 
             _mockEventRepository
-                .Setup(x => x.GetByIdAsync(eventId, It.IsAny<CancellationToken>()))
+                .Setup(x => x.GetByIdWithDetailsAsync(eventId, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(evnt);
 
             _mockVenueRepository
@@ -702,7 +692,7 @@ namespace EventBookingSystem.Application.Tests.Services
             result.IsSuccessful.Should().BeFalse();
             result.Message.Should().Contain("Failed to create booking");
             _mockBookingRepository.Verify(x => x.AddAsync(It.IsAny<Booking>(), It.IsAny<CancellationToken>()), Times.Once);
-            _mockEventRepository.Verify(x => x.AddAsync(It.IsAny<EventBase>(), It.IsAny<CancellationToken>()), Times.Never);
+            _mockEventRepository.Verify(x => x.UpdateAsync(It.IsAny<EventBase>(), It.IsAny<CancellationToken>()), Times.Never);
         }
     }
 }

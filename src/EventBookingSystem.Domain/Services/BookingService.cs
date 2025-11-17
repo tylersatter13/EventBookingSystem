@@ -168,8 +168,9 @@ namespace EventBookingSystem.Domain.Services
         /// <summary>
         /// Creates booking items based on the event type and reservation request.
         /// GA bookings don't need BookingItems since capacity is tracked on the event itself.
+        /// Also performs the actual reservation on the event entity.
         /// </summary>
-        private void CreateBookingItems(Booking booking, EventBase evnt, ReservationRequest request)
+       private void CreateBookingItems(Booking booking, EventBase evnt, ReservationRequest request)
         {
             switch (evnt)
             {
@@ -177,6 +178,8 @@ namespace EventBookingSystem.Domain.Services
                     // GA bookings don't need BookingItems
                     // Capacity is tracked on GeneralAdmissionEvent.Attendees
                     // The booking itself records the transaction
+                    // Reserve the tickets on the event
+                    ga.ReserveTickets(request.Quantity);
                     break;
 
                 case SectionBasedEvent sb when request.SectionId.HasValue:
@@ -188,6 +191,8 @@ namespace EventBookingSystem.Domain.Services
                         EventSection = section,
                         Quantity = request.Quantity
                     });
+                    // Reserve the capacity on the section
+                    sb.ReserveInSection(request.SectionId.Value, request.Quantity);
                     break;
 
                 case ReservedSeatingEvent rs when request.SeatId.HasValue:
@@ -200,6 +205,8 @@ namespace EventBookingSystem.Domain.Services
                         EventSeat = eventSeat,
                         Quantity = 1
                     });
+                    // Reserve the seat
+                    rs.ReserveSeat(request.SeatId.Value);
                     break;
             }
         }

@@ -60,19 +60,27 @@ public class DapperBookingRepositoryTests
             PaymentStatus = PaymentStatus.Pending,
             TotalAmount = 150.00m,
             CreatedAt = DateTime.UtcNow,
-            BookingItems = new List<BookingItem>()
+            BookingItems = null
         };
 
+        var addResult = await repository.AddAsync(booking);
+        
+
         // Act
-        var result = await repository.AddAsync(booking);
+        var result = await repository.GetByIdAsync(addResult.Id);
 
         // Assert
-        result.Should().NotBeNull();
-        result.Should().BeSameAs(booking, because: "the same instance should be returned");
-        result.Id.Should().BeGreaterThan(0, because: "a valid ID should be assigned");
+        result.User.Id.Should().Be(userId);
+        result.Event.Id.Should().Be(eventId);
         result.BookingType.Should().Be(BookingType.GA);
         result.PaymentStatus.Should().Be(PaymentStatus.Pending);
         result.TotalAmount.Should().Be(150.00m);
+        result.Should().NotBeNull();
+        result.Id.Should().BeGreaterThan(0, because: "a valid ID should be assigned");
+
+        result.BookingItems.Should().BeEmpty();
+
+
     }
 
     [TestMethod]

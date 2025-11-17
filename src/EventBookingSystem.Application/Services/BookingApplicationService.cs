@@ -118,7 +118,8 @@ namespace EventBookingSystem.Application.Services
                 return EntityLoadResult.Failure("User not found");
             }
 
-            var evnt = await _eventRepository.GetByIdAsync(command.EventId);
+            // Use GetByIdWithDetailsAsync to load related data (Seats, SectionInventories, etc.)
+            var evnt = await _eventRepository.GetByIdWithDetailsAsync(command.EventId);
             if (evnt == null)
             {
                 return EntityLoadResult.Failure("Event not found");
