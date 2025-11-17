@@ -36,6 +36,12 @@ public class DapperEventRepository : IEventRepository
 
         try
         {
+            // Ensure VenueId is set from Venue if provided
+            if (entity.Venue != null && entity.VenueId == 0)
+            {
+                entity.VenueId = entity.Venue.Id;
+            }
+
             var dto = EventMapper.ToDto(entity);
 
             // Insert the main event record
@@ -47,6 +53,21 @@ public class DapperEventRepository : IEventRepository
             await SaveRelatedDataAsync(connection, transaction, entity);
 
             transaction.Commit();
+            
+            // Load the venue if VenueId is set but Venue is null
+            if (entity.Venue == null && entity.VenueId > 0)
+            {
+                var venueSql = "SELECT * FROM Venues WHERE Id = @Id";
+                var venueDto = await connection.QueryFirstOrDefaultAsync<VenueDto>(
+                    venueSql, 
+                    new { Id = entity.VenueId });
+                
+                if (venueDto != null)
+                {
+                    entity.Venue = VenueMapper.ToDomain(venueDto);
+                }
+            }
+            
             return entity;
         }
         catch
@@ -63,7 +84,20 @@ public class DapperEventRepository : IEventRepository
         var sql = "SELECT * FROM Events WHERE Id = @Id";
         var dto = await connection.QueryFirstOrDefaultAsync<EventDto>(sql, new { Id = id });
 
-        return dto != null ? EventMapper.ToDomain(dto) : null;
+        if (dto == null)
+            return null;
+
+        var eventBase = EventMapper.ToDomain(dto);
+
+        // Load Venue navigation property
+        var venueSql = "SELECT * FROM Venues WHERE Id = @Id";
+        var venueDto = await connection.QueryFirstOrDefaultAsync<VenueDto>(venueSql, new { Id = dto.VenueId });
+        if (venueDto != null)
+        {
+            eventBase.Venue = VenueMapper.ToDomain(venueDto);
+        }
+
+        return eventBase;
     }
 
     public async Task<EventBase?> GetByIdWithDetailsAsync(int id, CancellationToken cancellationToken = default)

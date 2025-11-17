@@ -22,5 +22,7 @@ namespace EventBookingSystem.Infrastructure.Interfaces
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A collection of bookings for the event.</returns>
         Task<IEnumerable<Booking>> GetByEventIdAsync(int eventId, CancellationToken cancellationToken = default);
+
+        Task<IEnumerable<Booking>> GetAllBookings();
     }
 }

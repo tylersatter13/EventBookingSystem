@@ -25,6 +25,6 @@ namespace EventBookingSystem.Domain.Services
         /// <summary>
         /// Gets or sets optional customer/booking information.
         /// </summary>
-        public string? CustomerId { get; set; }
+        public int? CustomerId { get; set; }
     }
 }

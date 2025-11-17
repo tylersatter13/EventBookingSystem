@@ -34,13 +34,26 @@ public class DapperBookingRepository : IBookingRepository
         dto.Id = await connection.ExecuteScalarAsync<int>(sql, dto);
         entity.Id = dto.Id;
 
-        // If there are booking items, insert them as well
+        // Insert booking items only if they exist
+        // GA (General Admission) bookings don't have booking items - capacity tracked on event
+        // Section bookings require booking items with EventSectionInventoryId set
+        // Seat bookings require booking items with EventSeatId set
         if (entity.BookingItems != null && entity.BookingItems.Any())
         {
             foreach (var item in entity.BookingItems)
             {
                 var itemDto = BookingItemMapper.ToDto(item);
                 itemDto.BookingId = entity.Id;
+
+                // Validate database CHECK constraint: BookingItem must have either EventSeatId OR EventSectionInventoryId
+                // If this fails, it means the BookingService incorrectly created BookingItems for a GA booking
+                if (itemDto.EventSeatId == null && itemDto.EventSectionInventoryId == null)
+                {
+                    throw new InvalidOperationException(
+                        $"BookingItem must have either EventSeatId or EventSectionInventoryId. " +
+                        $"BookingType: {entity.BookingType}. " +
+                        $"This indicates a bug in booking creation logic.");
+                }
 
                 var itemSql = @"
                     INSERT INTO BookingItems (BookingId, EventSeatId, EventSectionInventoryId, Quantity)
@@ -65,14 +78,7 @@ public class DapperBookingRepository : IBookingRepository
         if (dto == null)
             return null;
 
-        var booking = BookingMapper.ToDomain(dto);
-
-        // Load booking items
-        var itemsSql = "SELECT * FROM BookingItems WHERE BookingId = @BookingId";
-        var itemDtos = await connection.QueryAsync<BookingItemDto>(itemsSql, new { BookingId = id });
-        booking.BookingItems = itemDtos.Select(BookingItemMapper.ToDomain).ToList();
-
-        return booking;
+        return await PopulateBookingNavigationProperties(connection, dto);
     }
 
     public async Task<IEnumerable<Booking>> GetByUserIdAsync(int userId, CancellationToken cancellationToken = default)
@@ -85,13 +91,7 @@ public class DapperBookingRepository : IBookingRepository
         var bookings = new List<Booking>();
         foreach (var dto in dtos)
         {
-            var booking = BookingMapper.ToDomain(dto);
-
-            // Load booking items for each booking
-            var itemsSql = "SELECT * FROM BookingItems WHERE BookingId = @BookingId";
-            var itemDtos = await connection.QueryAsync<BookingItemDto>(itemsSql, new { BookingId = dto.Id });
-            booking.BookingItems = itemDtos.Select(BookingItemMapper.ToDomain).ToList();
-
+            var booking = await PopulateBookingNavigationProperties(connection, dto);
             bookings.Add(booking);
         }
 
@@ -108,16 +108,58 @@ public class DapperBookingRepository : IBookingRepository
         var bookings = new List<Booking>();
         foreach (var dto in dtos)
         {
-            var booking = BookingMapper.ToDomain(dto);
-
-            // Load booking items for each booking
-            var itemsSql = "SELECT * FROM BookingItems WHERE BookingId = @BookingId";
-            var itemDtos = await connection.QueryAsync<BookingItemDto>(itemsSql, new { BookingId = dto.Id });
-            booking.BookingItems = itemDtos.Select(BookingItemMapper.ToDomain).ToList();
-
+            var booking = await PopulateBookingNavigationProperties(connection, dto);
             bookings.Add(booking);
         }
 
         return bookings;
+    }
+
+    public async Task<IEnumerable<Booking>> GetAllBookings()
+    {
+        using var connection = await _connectionFactory.CreateConnectionAsync();
+
+        var sql = "SELECT * FROM Bookings ORDER BY CreatedAt DESC";
+        var dtos = await connection.QueryAsync<BookingDto>(sql);
+
+        var bookings = new List<Booking>();
+        foreach (var dto in dtos)
+        {
+            var booking = await PopulateBookingNavigationProperties(connection, dto);
+            bookings.Add(booking);
+        }
+
+        return bookings;
+    }
+
+    /// <summary>
+    /// Populates navigation properties (User, Event, BookingItems) for a booking.
+    /// </summary>
+    private async Task<Booking> PopulateBookingNavigationProperties(IDbConnection connection, BookingDto dto)
+    {
+        var booking = BookingMapper.ToDomain(dto);
+
+        // Load User
+        var userSql = "SELECT * FROM Users WHERE Id = @Id";
+        var userDto = await connection.QueryFirstOrDefaultAsync<UserDto>(userSql, new { Id = dto.UserId });
+        if (userDto != null)
+        {
+            booking.User = UserMapper.ToDomain(userDto);
+        }
+
+        // Load Event  
+        var eventSql = "SELECT * FROM Events WHERE Id = @Id";
+        var eventDto = await connection.QueryFirstOrDefaultAsync<EventDto>(eventSql, new { Id = dto.EventId });
+        if (eventDto != null)
+        {
+            booking.Event = EventMapper.ToDomain(eventDto);
+        }
+
+        // Load booking items
+        var itemsSql = "SELECT * FROM BookingItems WHERE BookingId = @BookingId";
+        var itemDtos = await connection.QueryAsync<BookingItemDto>(itemsSql, new { BookingId = dto.Id });
+        booking.BookingItems = itemDtos.Select(BookingItemMapper.ToDomain).ToList();
+
+        return booking;
     }
 }

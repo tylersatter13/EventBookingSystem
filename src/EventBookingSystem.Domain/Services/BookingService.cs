@@ -6,7 +6,7 @@ namespace EventBookingSystem.Domain.Services
     /// Domain service responsible for creating and managing bookings.
     /// Orchestrates validation and booking creation following SOLID principles.
     /// </summary>
-    public class BookingService
+    public class BookingService : IBookingService
     {
         private readonly EventReservationService _reservationService;
         private readonly IEnumerable<IBookingValidator> _bookingValidators;
@@ -167,21 +167,16 @@ namespace EventBookingSystem.Domain.Services
 
         /// <summary>
         /// Creates booking items based on the event type and reservation request.
+        /// GA bookings don't need BookingItems since capacity is tracked on the event itself.
         /// </summary>
         private void CreateBookingItems(Booking booking, EventBase evnt, ReservationRequest request)
         {
             switch (evnt)
             {
                 case GeneralAdmissionEvent ga:
-                    // For GA, create items representing quantity
-                    for (int i = 0; i < request.Quantity; i++)
-                    {
-                        booking.BookingItems.Add(new BookingItem
-                        {
-                            Booking = booking,
-                            Quantity = 1
-                        });
-                    }
+                    // GA bookings don't need BookingItems
+                    // Capacity is tracked on GeneralAdmissionEvent.Attendees
+                    // The booking itself records the transaction
                     break;
 
                 case SectionBasedEvent sb when request.SectionId.HasValue:

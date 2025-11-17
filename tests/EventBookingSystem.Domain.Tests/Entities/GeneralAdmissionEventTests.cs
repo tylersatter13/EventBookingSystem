@@ -24,24 +24,6 @@ namespace EventBookingSystem.Domain.Tests.Entities
         }
 
         [TestMethod]
-        public void TotalCapacity_WithOverride_ReturnsOverride()
-        {
-            // Arrange
-            var evnt = new GeneralAdmissionEvent
-            {
-                Name = "Festival with Stage",
-                Capacity = 5000,
-                CapacityOverride = 4500  // Reduced due to stage
-            };
-
-            // Act
-            var capacity = evnt.TotalCapacity;
-
-            // Assert
-            capacity.Should().Be(4500, because: "override should take precedence");
-        }
-
-        [TestMethod]
         public void TotalReserved_InitiallyZero()
         {
             // Arrange

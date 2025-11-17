@@ -25,12 +25,8 @@ namespace EventBookingSystem.Domain.Entities
         /// </summary>
         public decimal? Price { get; set; }
         
-        /// <summary>
-        /// Optional capacity override (e.g., stage setup reducing capacity).
-        /// </summary>
-        public int? CapacityOverride { get; set; }
         
-        public override int TotalCapacity => CapacityOverride ?? Capacity;
+        public override int TotalCapacity => Capacity;
         public override int TotalReserved => _attendees;
         public override bool IsSoldOut => _attendees >= TotalCapacity;
         

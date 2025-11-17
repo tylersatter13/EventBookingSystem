@@ -2,7 +2,7 @@
 
 namespace EventBookingSystem.Infrastructure.Interfaces
 {
-    public interface IVenueRepository: IRespository<Venue>
+    public interface IVenueRepository : IRespository<Venue>
     {
-    } 
+    }
 }

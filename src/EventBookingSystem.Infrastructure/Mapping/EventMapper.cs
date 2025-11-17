@@ -44,7 +44,7 @@ public static class EventMapper
                 dto.GA_Capacity = gaEvent.Capacity;
                 dto.GA_Attendees = gaEvent.Attendees;
                 dto.GA_Price = gaEvent.Price;
-                dto.GA_CapacityOverride = gaEvent.CapacityOverride;
+                dto.GA_CapacityOverride = null; // Not used in current domain model
                 break;
 
             case SectionBasedEvent sbEvent:
@@ -74,8 +74,7 @@ public static class EventMapper
             EndsAt = dto.EndsAt,
             EstimatedAttendance = dto.EstimatedAttendance,
             Capacity = dto.GA_Capacity ?? 0,
-            Price = dto.GA_Price,
-            CapacityOverride = dto.GA_CapacityOverride
+            Price = dto.GA_Price
         };
 
         // Use reflection to set the private _attendees field

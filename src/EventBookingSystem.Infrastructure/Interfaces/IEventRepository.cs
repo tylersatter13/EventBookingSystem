@@ -63,4 +63,6 @@ public interface IEventRepository : IRespository<EventBase>
     /// <param name="seats">The event seats.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     Task SaveEventSeatsAsync(int eventId, IEnumerable<EventSeat> seats, CancellationToken cancellationToken = default);
+
+
 }
