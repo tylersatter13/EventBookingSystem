@@ -18,6 +18,7 @@ namespace EventBookingSystem.Application.Services
         private readonly IUserRepository _userRepository;
         private readonly IVenueRepository _venueRepository;
         private readonly IBookingService _bookingService;
+        private readonly IPaymentService _paymentService;
         private readonly IEnumerable<IBookingCommandValidator> _commandValidators;
 
         public BookingApplicationService(
@@ -26,6 +27,7 @@ namespace EventBookingSystem.Application.Services
             IUserRepository userRepository,
             IVenueRepository venueRepository,
             IBookingService bookingService,
+            IPaymentService paymentService,
             IEnumerable<IBookingCommandValidator> commandValidators = null)
         {
             _bookingRepository = bookingRepository;
@@ -33,14 +35,15 @@ namespace EventBookingSystem.Application.Services
             _userRepository = userRepository;
             _venueRepository = venueRepository;
             _bookingService = bookingService;
+            _paymentService = paymentService ?? throw new ArgumentNullException(nameof(paymentService));
             _commandValidators = commandValidators ?? Enumerable.Empty<IBookingCommandValidator>();
         }
 
         /// <summary>
         /// Creates a booking from a command.
-        /// Orchestrates the workflow: validate → load → create → persist → map.
+        /// Orchestrates the workflow: validate → load → create → process payment → persist → map.
         /// </summary>
-        public async Task<BookingResultDto> CreateBookingAsync(CreateBookingCommand command)
+        public async Task<BookingResultDto> CreateBookingAsync(CreateBookingCommand command, CancellationToken cancellationToken = default)
         {
             // 1. Validate command (application-level validation)
             var commandValidation = await ValidateCommandAsync(command);
@@ -50,7 +53,7 @@ namespace EventBookingSystem.Application.Services
             }
 
             // 2. Load required entities
-            var loadResult = await LoadRequiredEntitiesAsync(command);
+            var loadResult = await LoadRequiredEntitiesAsync(command, cancellationToken);
             if (!loadResult.IsSuccess)
             {
                 return BookingResultDto.Failure(loadResult.ErrorMessage);
@@ -76,16 +79,27 @@ namespace EventBookingSystem.Application.Services
                 loadResult.Event, 
                 request);
 
-           
-
-            // 6. Persist changes (infrastructure)
-            var persistResult = await PersistBookingAsync(booking, loadResult.Event);
-            if (!persistResult.IsSuccess)
+            // 6. Process payment BEFORE persisting the booking
+            var paymentResult = await ProcessPaymentAsync(booking, loadResult.Event, cancellationToken);
+            if (!paymentResult.IsSuccessful)
             {
-                return BookingResultDto.Failure(persistResult.ErrorMessage);
+                // Payment failed - rollback the event reservations
+                RollbackEventReservations(loadResult.Event, request);
+                return BookingResultDto.Failure($"Payment failed: {paymentResult.ErrorMessage}");
             }
 
-            // 7. Map to DTO
+            // Update booking payment status
+            booking.PaymentStatus = PaymentStatus.Paid;
+
+            // 7. Persist changes (infrastructure) - only if payment succeeded
+            var persistResult = await PersistBookingAsync(booking, loadResult.Event, cancellationToken);
+            if (!persistResult.IsSuccess)
+            {
+                // NOTE: In production, this would require a compensating transaction to refund the payment
+                return BookingResultDto.Failure($"Booking creation failed after payment: {persistResult.ErrorMessage}. Please contact support with transaction ID: {paymentResult.TransactionId}");
+            }
+
+            // 8. Map to DTO
             return MapToResultDto(booking);
         }
 
@@ -110,22 +124,22 @@ namespace EventBookingSystem.Application.Services
         /// Loads all required entities for the booking.
         /// Follows SRP - single responsibility of entity loading.
         /// </summary>
-        private async Task<EntityLoadResult> LoadRequiredEntitiesAsync(CreateBookingCommand command)
+        private async Task<EntityLoadResult> LoadRequiredEntitiesAsync(CreateBookingCommand command, CancellationToken cancellationToken)
         {
-            var user = await _userRepository.GetByIdAsync(command.UserId);
+            var user = await _userRepository.GetByIdAsync(command.UserId, cancellationToken);
             if (user == null)
             {
                 return EntityLoadResult.Failure("User not found");
             }
 
             // Use GetByIdWithDetailsAsync to load related data (Seats, SectionInventories, etc.)
-            var evnt = await _eventRepository.GetByIdWithDetailsAsync(command.EventId);
+            var evnt = await _eventRepository.GetByIdWithDetailsAsync(command.EventId, cancellationToken);
             if (evnt == null)
             {
                 return EntityLoadResult.Failure("Event not found");
             }
 
-            var venue = await _venueRepository.GetByIdAsync(evnt.VenueId);
+            var venue = await _venueRepository.GetByIdAsync(evnt.VenueId, cancellationToken);
             if (venue == null)
             {
                 return EntityLoadResult.Failure("Venue not found");
@@ -150,21 +164,83 @@ namespace EventBookingSystem.Application.Services
         }
 
         /// <summary>
+        /// Processes payment for the booking.
+        /// Follows SRP - single responsibility of payment processing.
+        /// </summary>
+        private async Task<PaymentResult> ProcessPaymentAsync(Booking booking, EventBase evnt, CancellationToken cancellationToken)
+        {
+            var paymentRequest = new PaymentRequest
+            {
+                UserId = booking.User.Id,
+                Amount = booking.TotalAmount,
+                Description = $"Booking for {evnt.Name} on {evnt.StartsAt:yyyy-MM-dd}",
+                PaymentMethod = "CreditCard"
+            };
+
+            return await _paymentService.ProcessPaymentAsync(paymentRequest, cancellationToken);
+        }
+
+        /// <summary>
+        /// Rolls back event reservations if payment fails.
+        /// This ensures event capacity is released if the booking cannot be completed.
+        /// </summary>
+        private void RollbackEventReservations(EventBase evnt, ReservationRequest request)
+        {
+            try
+            {
+                switch (evnt)
+                {
+                    case GeneralAdmissionEvent ga:
+                        // Release tickets back to the event
+                        // Note: GeneralAdmissionEvent doesn't have a ReleaseTickets method,
+                        // so the rollback happens because we don't persist the event
+                        break;
+
+                    case SectionBasedEvent sb when request.SectionId.HasValue:
+                        sb.ReleaseFromSection(request.SectionId.Value, request.Quantity);
+                        break;
+
+                    case ReservedSeatingEvent rs when request.SeatId.HasValue:
+                        // For reserved seating, the seat status needs to be reverted
+                        // Since ReserveSeat() changes status to Reserved, we need to handle rollback
+                        var seat = rs.GetSeat(request.SeatId.Value);
+                        if (seat != null && seat.Status == SeatStatus.Reserved)
+                        {
+                            // Manually revert the seat status for rollback
+                            // This is a special case for payment failure
+                            var eventSeat = rs.Seats.FirstOrDefault(s => s.VenueSeatId == request.SeatId.Value);
+                            if (eventSeat != null)
+                            {
+                                eventSeat.Status = SeatStatus.Available;
+                            }
+                        }
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log rollback failure but don't throw - payment already failed
+                // In production, this would be logged for manual intervention
+                System.Diagnostics.Debug.WriteLine($"Rollback failed: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Persists the booking and updates the event.
         /// Follows SRP - single responsibility of persistence.
         /// TODO: Wrap in transaction (Unit of Work pattern).
         /// </summary>
-        private async Task<PersistenceResult> PersistBookingAsync(Booking booking, EventBase evnt)
+        private async Task<PersistenceResult> PersistBookingAsync(Booking booking, EventBase evnt, CancellationToken cancellationToken)
         {
             try
             {
-                var bookingResult = await _bookingRepository.AddAsync(booking);
+                var bookingResult = await _bookingRepository.AddAsync(booking, cancellationToken);
                 if (bookingResult == null)
                 {
                     return PersistenceResult.Failure("Failed to create booking");
                 }
 
-                var eventResult = await _eventRepository.UpdateAsync(evnt);
+                var eventResult = await _eventRepository.UpdateAsync(evnt, cancellationToken);
                 if (eventResult == null)
                 {
                     return PersistenceResult.Failure("Failed to update event after booking");
@@ -189,7 +265,7 @@ namespace EventBookingSystem.Application.Services
                 IsSuccessful = true,
                 BookingId = booking.Id,
                 TotalAmount = booking.TotalAmount,
-                Message = "Booking created successfully"
+                Message = "Booking created successfully and payment processed"
             };
         }
 

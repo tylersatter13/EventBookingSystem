@@ -30,12 +30,16 @@ namespace EventBookingSystem.Application.Tests.Services
             var reservationService = new EventReservationService();
             _mockBookingService = new Mock<IBookingService>();
 
+            // Use deterministic payment service for tests
+            var paymentService = new DeterministicPaymentService();
+
             _service = new BookingApplicationService(
                 _mockBookingRepository.Object,
                 _mockEventRepository.Object,
                 _mockUserRepository.Object,
                 _mockVenueRepository.Object,
-                _mockBookingService.Object
+                _mockBookingService.Object,
+                paymentService
             );
         }
 
