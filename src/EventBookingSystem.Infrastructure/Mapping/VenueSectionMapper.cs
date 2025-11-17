@@ -8,6 +8,11 @@ namespace EventBookingSystem.Infrastructure.Mapping;
 /// </summary>
 public static class VenueSectionMapper
 {
+    /// <summary>
+    /// Converts a VenueSectionDto to a VenueSection domain entity.
+    /// </summary>
+    /// <param name="dto">The VenueSectionDto to convert.</param>
+    /// <returns>A VenueSection domain entity.</returns>
     public static VenueSection ToDomain(VenueSectionDto dto)
     {
         return new VenueSection
@@ -19,6 +24,11 @@ public static class VenueSectionMapper
         };
     }
 
+    /// <summary>
+    /// Converts a VenueSection domain entity to a VenueSectionDto.
+    /// </summary>
+    /// <param name="section">The VenueSection domain entity to convert.</param>
+    /// <returns>A VenueSectionDto.</returns>
     public static VenueSectionDto ToDto(VenueSection section)
     {
         return new VenueSectionDto

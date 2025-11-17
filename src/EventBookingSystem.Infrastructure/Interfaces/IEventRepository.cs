@@ -5,7 +5,7 @@ namespace EventBookingSystem.Infrastructure.Interfaces;
 /// <summary>
 /// Repository interface for Event entities supporting polymorphic event types.
 /// </summary>
-public interface IEventRepository : IRespository<EventBase>
+public interface IEventRepository : IRepository<EventBase>
 {
     /// <summary>
     /// Gets an event by ID with all related data (sections, seats, inventories).
@@ -63,6 +63,4 @@ public interface IEventRepository : IRespository<EventBase>
     /// <param name="seats">The event seats.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     Task SaveEventSeatsAsync(int eventId, IEnumerable<EventSeat> seats, CancellationToken cancellationToken = default);
-
-
 }

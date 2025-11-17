@@ -5,7 +5,7 @@ namespace EventBookingSystem.Infrastructure.Interfaces
     /// <summary>
     /// Repository interface for <see cref="User"/> entity operations.
     /// </summary>
-    public interface IUserRepository : IRespository<User>
+    public interface IUserRepository : IRepository<User>
     {
         /// <summary>
         /// Gets a user by their email address.

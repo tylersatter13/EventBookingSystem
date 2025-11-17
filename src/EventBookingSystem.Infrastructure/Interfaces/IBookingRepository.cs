@@ -5,7 +5,7 @@ namespace EventBookingSystem.Infrastructure.Interfaces
     /// <summary>
     /// Repository interface for Booking entity operations.
     /// </summary>
-    public interface IBookingRepository : IRespository<Booking>
+    public interface IBookingRepository : IRepository<Booking>
     {
         /// <summary>
         /// Gets all bookings for a specific user.

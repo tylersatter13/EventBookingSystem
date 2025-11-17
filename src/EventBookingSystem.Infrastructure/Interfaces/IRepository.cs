@@ -1,10 +1,13 @@
-﻿namespace EventBookingSystem.Infrastructure.Interfaces
+﻿using System;
+using System.Collections.Generic;
+
+namespace EventBookingSystem.Infrastructure.Interfaces
 {
     /// <summary>
     /// Generic repository interface for basic CRUD operations on entities.
     /// </summary>
     /// <typeparam name="TEntity">The entity type.</typeparam>
-    public interface IRespository<TEntity> where TEntity : class
+    public interface IRepository<TEntity> where TEntity : class
     {
         /// <summary>
         /// Gets an entity by its unique identifier.

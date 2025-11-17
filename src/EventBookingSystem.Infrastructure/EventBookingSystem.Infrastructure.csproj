@@ -12,10 +12,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Sql\" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\EventBookingSystem.Domain\EventBookingSystem.Domain.csproj" />
   </ItemGroup>
 
