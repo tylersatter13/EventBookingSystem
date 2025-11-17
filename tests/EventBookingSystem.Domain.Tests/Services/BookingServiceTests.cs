@@ -124,7 +124,7 @@ namespace EventBookingSystem.Domain.Tests.Services
             // Assert
             booking.Should().NotBeNull();
             booking.BookingType.Should().Be(BookingType.Seat);
-            booking.TotalAmount.Should().Be(0m); // Pricing not implemented yet
+            booking.TotalAmount.Should().Be(50m, because: "default reserved seating price is $50");
             booking.BookingItems.Should().HaveCount(1);
         }
 

@@ -158,9 +158,11 @@ namespace EventBookingSystem.Domain.Services
                 GeneralAdmissionEvent ga => (ga.Price ?? 0m) * request.Quantity,
                 SectionBasedEvent sb when request.SectionId.HasValue => 
                     (sb.GetSection(request.SectionId.Value)?.Price ?? 0m) * request.Quantity,
-                ReservedSeatingEvent rs => 
-                    // For reserved seating, pricing would come from a pricing service
-                    0m, // TODO: Implement pricing service
+                ReservedSeatingEvent rs when request.SeatId.HasValue => 
+                    // For reserved seating, use a simple default price
+                    // In production, this would come from a pricing service based on seat location/section
+                    50m, // Default price per seat
+                ReservedSeatingEvent => 0m,
                 _ => 0m
             };
         }

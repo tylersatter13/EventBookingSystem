@@ -336,37 +336,91 @@ namespace EventBookingSystem.Application.IntegrationTests.Services
         public async Task CreateBookingAsync_ReservedSeatingEvent_FullWorkflow_CreatesBookingSuccessfully()
         {
             // Arrange
-            var venue = IntegrationTestDataBuilder.CreateVenue();
+            var venue = IntegrationTestDataBuilder.CreateVenue(id: 1, name: "Theatre", sectionCount: 1, seatsPerSection: 50);
             var savedVenue = await _database.VenueRepository.AddAsync(venue);
 
-            var user = IntegrationTestDataBuilder.CreateUser();
+            var user = IntegrationTestDataBuilder.CreateUser(id: 1, name: "Theatre Lover", email: "theatre@example.com");
             await _database.UserRepository.AddAsync(user);
 
-            // Retrieve the saved venue to get actual VenueSeat IDs from database
+            // Get the actual venue seats from the saved venue
             var venueWithSeats = savedVenue;
-            
-            // Verify we have seats loaded
             if (venueWithSeats!.VenueSections == null || !venueWithSeats.VenueSections.Any() ||
                 !venueWithSeats.VenueSections.First().VenueSeats.Any())
             {
-                // Fallback: Reload venue from database if needed
                 venueWithSeats = await _database.VenueRepository.GetByIdAsync(savedVenue.Id);
-                
-                if (venueWithSeats!.VenueSections == null || !venueWithSeats.VenueSections.Any() ||
-                    !venueWithSeats.VenueSections.First().VenueSeats.Any())
-                {
-                    Assert.Fail("VenueRepository did not return venue with sections and seats loaded");
-                }
             }
             
-            // Get the first venue seat ID from the saved venue
+            venueWithSeats.Should().NotBeNull();
+            venueWithSeats!.VenueSections.Should().NotBeEmpty();
+            venueWithSeats.VenueSections.First().VenueSeats.Should().NotBeEmpty();
+            
+            // Get first seat ID from saved venue
             var firstVenueSeatId = venueWithSeats.VenueSections.First().VenueSeats.First().Id;
             
-            // Create event with EventSeats that reference actual VenueSeat IDs from database
-            // NOTE: ReservedSeatingEvent pricing is not yet implemented in BookingService.CalculateTotalAmount()
-            // For now, we create a SectionBasedEvent test instead, or we'd need to implement pricing
-            // For testing purposes, we'll skip this test scenario since payment requires non-zero amount
-            Assert.Inconclusive("ReservedSeatingEvent pricing not yet implemented - cannot test with payment integration. Use SectionBasedEvent test instead.");
+            // Create reserved seating event with the actual venue seat IDs
+            var evnt = new ReservedSeatingEvent
+            {
+                Id = 1,
+                VenueId = savedVenue.Id,
+                Name = "Theatre Show",
+                StartsAt = DateTime.UtcNow.AddDays(30),
+                EstimatedAttendance = 50,
+                Seats = new List<EventSeat>()
+            };
+            
+            // Add event seats for the first 10 venue seats (subset for testing)
+            foreach (var venueSeat in venueWithSeats.VenueSections.First().VenueSeats.Take(10))
+            {
+                evnt.Seats.Add(new EventSeat
+                {
+                    VenueSeatId = venueSeat.Id,
+                    Status = SeatStatus.Available
+                });
+            }
+            
+            evnt.Venue = savedVenue;
+            var savedEvent = await _database.EventRepository.AddAsync(evnt);
+            
+            // Verify event was saved with seats
+            savedEvent.Should().NotBeNull();
+            var rsEvent = savedEvent as ReservedSeatingEvent;
+            rsEvent.Should().NotBeNull();
+            rsEvent!.Seats.Should().HaveCount(10);
+            
+            // Create booking command for the first seat
+            var command = new CreateBookingCommand
+            {
+                UserId = user.Id,
+                EventId = savedEvent.Id,
+                Quantity = 1,
+                SeatId = firstVenueSeatId
+            };
+
+            // Act
+            var result = await _service.CreateBookingAsync(command);
+
+            // Assert
+            result.Should().NotBeNull();
+            result.IsSuccessful.Should().BeTrue(because: $"booking should succeed. Message: {result.Message}");
+            result.BookingId.Should().NotBeNull();
+            result.TotalAmount.Should().Be(50m, because: "default reserved seating price is $50");
+            result.Message.Should().Contain("successfully");
+
+            // Verify database state
+            var savedBooking = await _database.BookingRepository.GetByIdAsync(result.BookingId!.Value);
+            savedBooking.Should().NotBeNull();
+            savedBooking!.BookingType.Should().Be(BookingType.Seat);
+            savedBooking.TotalAmount.Should().Be(50m);
+            savedBooking.BookingItems.Should().HaveCount(1, because: "reserved seating creates one booking item per seat");
+
+            // Verify event seat was updated
+            var updatedEvent = await _database.EventRepository.GetByIdWithDetailsAsync(savedEvent.Id);
+            var updatedRsEvent = updatedEvent as ReservedSeatingEvent;
+            updatedRsEvent.Should().NotBeNull();
+            
+            var bookedSeat = updatedRsEvent!.Seats.FirstOrDefault(s => s.VenueSeatId == firstVenueSeatId);
+            bookedSeat.Should().NotBeNull();
+            bookedSeat!.Status.Should().Be(SeatStatus.Reserved, because: "the seat should be marked as reserved");
         }
     }
 }
