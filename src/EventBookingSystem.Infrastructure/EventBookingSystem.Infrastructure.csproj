@@ -15,4 +15,10 @@
     <ProjectReference Include="..\EventBookingSystem.Domain\EventBookingSystem.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Repositories\CompleteSchema.sql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
