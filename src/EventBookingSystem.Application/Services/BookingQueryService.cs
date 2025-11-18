@@ -1,5 +1,5 @@
 using EventBookingSystem.Application.DTOs;
-using EventBookingSystem.Infrastructure.Interfaces;
+using EventBookingSystem.Application.Interfaces;
 
 namespace EventBookingSystem.Application.Services
 {

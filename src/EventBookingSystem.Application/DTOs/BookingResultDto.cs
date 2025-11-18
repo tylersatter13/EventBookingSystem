@@ -2,14 +2,15 @@ namespace EventBookingSystem.Application.DTOs
 {
     /// <summary>
     /// Result DTO for booking operations.
+    /// Follows immutability pattern with init-only properties.
     /// </summary>
     public class BookingResultDto
     {
-        public bool IsSuccessful { get; set; }
-        public int? BookingId { get; set; }
-        public decimal TotalAmount { get; set; }
-        public string Message { get; set; } = string.Empty;
-        public List<string> Errors { get; set; } = new();
+        public bool IsSuccessful { get; init; }
+        public int? BookingId { get; init; }
+        public decimal TotalAmount { get; init; }
+        public string Message { get; init; } = string.Empty;
+        public List<string> Errors { get; init; } = new();
 
         public static BookingResultDto Success(int bookingId, decimal totalAmount, string message)
         {

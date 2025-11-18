@@ -7,11 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\EventBookingSystem.Infrastructure\EventBookingSystem.Infrastructure.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Mapping\" />
+    <ProjectReference Include="..\EventBookingSystem.Domain\EventBookingSystem.Domain.csproj" />
   </ItemGroup>
 
 </Project>

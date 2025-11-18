@@ -2,7 +2,7 @@ using System.Data;
 using Dapper;
 using EventBookingSystem.Infrastructure.Data;
 using EventBookingSystem.Infrastructure.Models;
-using EventBookingSystem.Infrastructure.Interfaces;
+using EventBookingSystem.Application.Interfaces;
 using EventBookingSystem.Domain.Entities;
 using EventBookingSystem.Infrastructure.Mapping;
 

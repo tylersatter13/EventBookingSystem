@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\EventBookingSystem.Domain\EventBookingSystem.Domain.csproj" />
+    <ProjectReference Include="..\EventBookingSystem.Application\EventBookingSystem.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>

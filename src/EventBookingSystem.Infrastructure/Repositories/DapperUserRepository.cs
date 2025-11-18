@@ -1,7 +1,7 @@
 using Dapper;
 using EventBookingSystem.Domain.Entities;
 using EventBookingSystem.Infrastructure.Data;
-using EventBookingSystem.Infrastructure.Interfaces;
+using EventBookingSystem.Application.Interfaces;
 using EventBookingSystem.Infrastructure.Mapping;
 using EventBookingSystem.Infrastructure.Models;
 
@@ -76,5 +76,20 @@ public class DapperUserRepository : IUserRepository
         var dto = await connection.QueryFirstOrDefaultAsync<UserDto>(sql, new { Email = email });
 
         return dto != null ? UserMapper.ToDomain(dto) : null;
+    }
+
+    /// <summary>
+    /// Gets all users in the system.
+    /// </summary>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A collection of all users.</returns>
+    public async Task<IEnumerable<User>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
+
+        var sql = "SELECT * FROM Users ORDER BY Name";
+        var dtos = await connection.QueryAsync<UserDto>(sql);
+
+        return dtos.Select(UserMapper.ToDomain).ToList();
     }
 }

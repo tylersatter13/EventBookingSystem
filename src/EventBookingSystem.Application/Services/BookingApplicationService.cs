@@ -1,9 +1,9 @@
 ﻿using EventBookingSystem.Application.DTOs;
+using EventBookingSystem.Application.Interfaces;
 using EventBookingSystem.Application.Models;
 using EventBookingSystem.Domain;
 using EventBookingSystem.Domain.Entities;
 using EventBookingSystem.Domain.Services;
-using EventBookingSystem.Infrastructure.Interfaces;
 
 namespace EventBookingSystem.Application.Services
 {
@@ -11,7 +11,7 @@ namespace EventBookingSystem.Application.Services
     /// Application service that orchestrates booking operations.
     /// Follows SOLID principles by delegating to specialized services and validators.
     /// </summary>
-    public class BookingApplicationService
+    public class BookingApplicationService : IBookingApplicationService
     {
         private readonly IBookingRepository _bookingRepository;
         private readonly IEventRepository _eventRepository;

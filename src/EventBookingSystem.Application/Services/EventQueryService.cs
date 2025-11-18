@@ -1,6 +1,6 @@
 using EventBookingSystem.Application.DTOs;
+using EventBookingSystem.Application.Interfaces;
 using EventBookingSystem.Domain.Entities;
-using EventBookingSystem.Infrastructure.Interfaces;
 
 namespace EventBookingSystem.Application.Services
 {

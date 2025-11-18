@@ -1,7 +1,7 @@
 using AwesomeAssertions;
+using EventBookingSystem.Application.Interfaces;
 using EventBookingSystem.Application.Services;
 using EventBookingSystem.Domain.Entities;
-using EventBookingSystem.Infrastructure.Interfaces;
 using Moq;
 
 namespace EventBookingSystem.Application.Tests.Services

@@ -1,10 +1,10 @@
 using AwesomeAssertions;
+using EventBookingSystem.Application.Interfaces;
 using EventBookingSystem.Application.Models;
 using EventBookingSystem.Application.Services;
 using EventBookingSystem.Domain;
 using EventBookingSystem.Domain.Entities;
 using EventBookingSystem.Domain.Services;
-using EventBookingSystem.Infrastructure.Interfaces;
 using Moq;
 
 namespace EventBookingSystem.Application.Tests.Services

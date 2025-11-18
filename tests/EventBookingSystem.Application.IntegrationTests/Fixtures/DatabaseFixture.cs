@@ -1,7 +1,7 @@
 using System.Data;
 using Microsoft.Data.Sqlite;
 using EventBookingSystem.Infrastructure.Data;
-using EventBookingSystem.Infrastructure.Interfaces;
+using EventBookingSystem.Application.Interfaces;
 using EventBookingSystem.Infrastructure.Repositories;
 
 namespace EventBookingSystem.Application.IntegrationTests.Fixtures

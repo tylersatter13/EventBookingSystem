@@ -1,7 +1,7 @@
 using Dapper;
 using EventBookingSystem.Domain.Entities;
 using EventBookingSystem.Infrastructure.Data;
-using EventBookingSystem.Infrastructure.Interfaces;
+using EventBookingSystem.Application.Interfaces;
 using EventBookingSystem.Infrastructure.Mapping;
 using EventBookingSystem.Infrastructure.Models;
 
@@ -111,5 +111,71 @@ public class DapperVenueRepository : IVenueRepository
         var dto = await connection.QueryFirstOrDefaultAsync<VenueDto>(sql, new { Id = id });
 
         return dto != null ? VenueMapper.ToDomain(dto) : null;
+    }
+
+    /// <summary>
+    /// Gets a venue by its ID with all sections and seats loaded.
+    /// </summary>
+    /// <param name="id">The venue ID.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The <see cref="Venue"/> with sections if found; otherwise, null.</returns>
+    public async Task<Venue?> GetByIdWithSectionsAsync(int id, CancellationToken cancellationToken = default)
+    {
+        using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
+
+        // Load venue
+        var venueSql = "SELECT * FROM Venues WHERE Id = @Id";
+        var venueDto = await connection.QueryFirstOrDefaultAsync<VenueDto>(venueSql, new { Id = id });
+
+        if (venueDto == null)
+            return null;
+
+        var venue = VenueMapper.ToDomain(venueDto);
+
+        // Load sections
+        var sectionsSql = "SELECT * FROM VenueSections WHERE VenueId = @VenueId";
+        var sectionDtos = await connection.QueryAsync<VenueSectionDto>(sectionsSql, new { VenueId = id });
+
+        foreach (var sectionDto in sectionDtos)
+        {
+            var section = VenueSectionMapper.ToDomain(sectionDto);
+            section.Venue = venue;
+
+            // Load seats for this section
+            var seatsSql = "SELECT * FROM VenueSeats WHERE VenueSectionId = @SectionId";
+            var seatDtos = await connection.QueryAsync<VenueSeatDto>(seatsSql, new { SectionId = section.Id });
+
+            foreach (var seatDto in seatDtos)
+            {
+                var seat = new VenueSeat
+                {
+                    Id = seatDto.Id,
+                    Row = seatDto.Row,
+                    SeatNumber = seatDto.SeatNumber,
+                    SeatLabel = seatDto.SeatLabel,
+                    Section = section
+                };
+                section.VenueSeats.Add(seat);
+            }
+
+            venue.VenueSections.Add(section);
+        }
+
+        return venue;
+    }
+
+    /// <summary>
+    /// Gets all venues in the system.
+    /// </summary>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A collection of all venues.</returns>
+    public async Task<IEnumerable<Venue>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
+
+        var sql = "SELECT * FROM Venues ORDER BY Name";
+        var dtos = await connection.QueryAsync<VenueDto>(sql);
+
+        return dtos.Select(VenueMapper.ToDomain).ToList();
     }
 }
